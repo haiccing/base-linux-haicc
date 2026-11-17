@@ -8,10 +8,10 @@ is here, in plain POSIX sh: the installer, linking a sources folder,
 putting Bare in place. From then on `haicc` starts the app for
 everything else.
 
-| | |
-|---|---|
-| [bin/](bin/) | the scripts |
-| [test/](test/) | its test: the whole flow, from the installer to a started host |
+## Links
+
+- [bin](bin/)
+- [test](test/)
 
 ## Install
 
@@ -80,5 +80,3 @@ a linked sources folder is offline and repeats exactly.
 - `build.sh`: writes `haicc-install.sh` from `bin/` and `pins`. Run it
   after a change to either.
 - `haicc-install.sh`: the installer, generated.
-
-Written from [splectrum/splectrum-dev-env-3-mycelium](https://github.com/splectrum/splectrum-dev-env-3-mycelium).
