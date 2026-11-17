@@ -106,8 +106,41 @@ has "$out" "no boot mrepo" "said: no boot mrepo (haicc boot/deploy)"
 is "$(haicc sources no-https)" "folder:$SOURCES" "haicc sources no-https: the backup off"
 haicc sources https >/dev/null; haicc sources link "$SOURCES" >/dev/null
 is "$(haicc sources | wc -l | tr -d ' ')" 2 "https back on; a folder linked twice is listed once"
-out=$(haicc sources download "$HAICC_ORG" 2>&1); is $? 3 "haicc sources download $HAICC_ORG: our packages are not published yet, exit 3"
-has "$out" "not published yet" "said"
+# our packages downloaded from their releases, in sh, into another
+# install: a copy of the releases' layout made from the sources
+# (HAICC_RELEASES, file://), the manifest an asset of base-linux-haicc's
+# (each package at its own release, r-<its commit>; its addons, all of them)
+rel=$T/releases
+mkdir -p "$rel/base-linux-haicc/releases/latest/download"
+cp "$SOURCES/$HAICC_ORG/manifest.json" "$rel/base-linux-haicc/releases/latest/download/"
+(cd "$SOURCES" && tar -cf "$T/addons.tar" addons)
+sed -n 's/^      "file": "\(.*\)",$/\1/p; s/^      "commit": "\(.......\).*/\1/p' "$SOURCES/$HAICC_ORG/manifest.json" | paste - - > "$T/released"
+while read -r f c; do
+  p=$(basename "$f" .bundle); d=$rel/$p/releases/download/r-$c
+  mkdir -p "$d"; cp "$SOURCES/$f" "$d/"; cp "$T/addons.tar" "$d/$p-addons.tar"
+done < "$T/released"
+tag=r-$(sed -n "s|^$HAICC_ORG/$APP_PACKAGE.bundle\t||p" "$T/released")
+sh "$pkg/haicc-install.sh" --home="$T/dl" --bin="$T/dlbin" >/dev/null 2>&1
+out=$(HAICC_RELEASES=file://$rel "$T/dlbin/haicc" sources download "$HAICC_ORG" 2>&1)
+is $? 0 "haicc sources download $HAICC_ORG: our packages fetched from their releases"
+has "$out" "$HAICC_ORG/$APP_PACKAGE: fetched ($tag)" "each from its own release, r-<commit>"
+cmp -s "$T/dl/sources/$HAICC_ORG/manifest.json" "$SOURCES/$HAICC_ORG/manifest.json" && ok "the manifest written, as published" || no "the manifest written, as published"
+same=yes; while read -r f c; do cmp -s "$SOURCES/$f" "$T/dl/sources/$f" || same=no; done < "$T/released"
+is "$same" yes "every bundle there, as in the sources"
+is "$(ls "$T/dl/sources/addons" | wc -l | tr -d ' ')" "$(sed -n 's/^        "\([0-9a-f]\{64\}\)",\{0,1\}$/\1/p' "$SOURCES/$HAICC_ORG/manifest.json" | sort -u | wc -l | tr -d ' ')" "every addon the manifest names there"
+has "$("$T/dlbin/haicc" prereq --check)" "ok       sources: $T/dl/sources" "the folder registered: it holds the app"
+out=$(HAICC_RELEASES=file://$rel "$T/dlbin/haicc" sources download "$HAICC_ORG" 2>&1)
+is $? 0 "again: nothing fetched twice"
+has "$out" "$HAICC_ORG/$APP_PACKAGE: there" "said: there"
+rm "$T/dl/sources/$HAICC_ORG/$APP_PACKAGE.bundle"
+printf x >> "$rel/$APP_PACKAGE/releases/download/$tag/$APP_PACKAGE.bundle"
+out=$(HAICC_RELEASES=file://$rel "$T/dlbin/haicc" sources download "$HAICC_ORG" 2>&1)
+is $? 3 "a bundle not as its manifest says: exit 3"
+has "$out" "not as the manifest says (sha256)" "said"
+[ ! -e "$T/dl/sources/$HAICC_ORG/$APP_PACKAGE.bundle" ] && ok "and not kept" || no "and not kept"
+out=$(HAICC_RELEASES=file://$T/nowhere "$T/dlbin/haicc" sources download "$HAICC_ORG" 2>&1)
+is $? 3 "no manifest to fetch: exit 3"
+has "$out" "could not fetch the manifest" "said"
 haicc sources download nosuch >/dev/null 2>&1; is $? 3 "nothing to download by that name: exit 3"
 
 # 6. the boot: the boot mrepo at the root, its runtime started, nothing deployed
@@ -166,7 +199,7 @@ out=$(haicc host boot/deploy 2>&1 >/dev/null); is "$out" "haicc: missing argumen
 out=$(haicc host 2>&1); is $? 2 "haicc host, no command: exit 2 at the command line"
 out=$(haicc . protocol/activate . service 2>&1 >/dev/null); is "$out" "haicc: not now: protocol activate (protocol is not active)" "activating a protocol is the hooks', not a command from outside"
 out=$(haicc . deploy/teardown host 2>&1 >/dev/null); is $? 1 "a protocol that is not there: exit 1"
-is "$out" "haicc: no protocol: deploy (boot, crud, haicc, help, howto, runtime)" "said, with the protocols there"
+is "$out" "haicc: no protocol: deploy (boot, crud, haicc, help, howto, info, runtime)" "said, with the protocols there"
 out=$(haicc . boot/remove host 2>&1 >/dev/null); is "$out" "haicc: no action: boot remove (deploy, redeploy, teardown)" "an action that is not there: said, with the protocol's actions"
 
 # 9. a node inside the host; commands chained through both
@@ -309,6 +342,28 @@ has "$(haicc --output host help/get . packages/haiccing/base-component-haicc/how
 out=$(haicc --output host howto/get . pipeline 2>&1); is $? 0 "an activity that is none here: answered, no error"
 has "$out" '{"asked":"pipeline","found":false,"why":"no activity pipeline here","activities":[' "said, with the activities there are"
 is "$(haicc --output host howto/extract 2>&1)" '{"howtos":2,"activities":["container","node"],"changed":false,"problems":0}' "haicc host howto/extract: extracted already, with the help, by its hook; no how-to against its form"
+
+# 9d. info: the pages by keywords from the top down, the keywords where the
+# URI is, no dot
+out=$(haicc --output . info 2>&1)
+has "$out" '"keyword":".","choices":[{"title":"base-component-boot"' "haicc . info: the boot mrepo's top page, its own package's README (info alone is info/get)"
+has "$out" '{"keyword":"boot","oneliner":"' "its keywords: an included package by its name without the prefix"
+out=$(haicc --output host info 2>&1)
+has "$out" '"choices":[{"title":"base-component-haicc"' "haicc host info: the host's top page"
+has "$out" '{"keyword":"container","oneliner":"' "its included packages"
+has "$out" '{"keyword":"modules","oneliner":"' "and the pages made at extraction: modules"
+has "$out" '{"keyword":"third-party","oneliner":"' "and third-party"
+has "$(haicc --output host info/get boot 2>&1)" '"title":"base-package-boot"' "haicc host info/get boot: a protocol's page, its package's README"
+out=$(haicc --output host info/get info/extract 2>&1)
+has "$out" '"title":"extract","oneliner":"Writes the mrepo' "haicc host info/get info/extract: an action, a jump from its package into its module"
+has "$out" '{"keyword":"info/extract/signature"' "its sections below it"
+has "$(haicc --output host info/get info extract signature 2>&1)" '"title":"Signature"' "a section; the keywords as words too"
+has "$(haicc --output host info/get modules/mrepo-base-info 2>&1)" '"title":"mrepo-base-info"' "a module, once, under modules"
+has "$(haicc --output host info/get third-party 2>&1)" '"generated":true' "third-party: made at extraction, marked so"
+has "$(haicc --output host info/get mrepo 2>&1)" '"choices":[{"title":"mrepo/"' "a keyword with several meanings: each a choice"
+out=$(haicc --output host info/get nothing-here 2>&1); is $? 1 "a keyword that is not there: exit 1"
+has "$out" "no nothing-here here: nearest ." "said, with the nearest and what is below it"
+has "$(haicc --output host info/extract 2>&1)" '"changed":false' "haicc host info/extract: extracted already, by its hook"
 
 # 10. torn down: the node; the service stopped and shut down; the host
 is "$(haicc --output host boot/teardown node-1 2>&1)" '{"tornDown":"node-1"}' "haicc host boot/teardown node-1"
