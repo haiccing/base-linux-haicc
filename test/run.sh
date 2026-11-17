@@ -197,9 +197,9 @@ out=$(haicc . boot/teardown . 2>&1 >/dev/null); is "$out" "haicc: missing argume
 out=$(haicc . boot/deploy other 2>&1 >/dev/null); is "$out" "haicc: missing argument: package" "haicc . boot/deploy other: missing argument: package"
 out=$(haicc host boot/deploy 2>&1 >/dev/null); is "$out" "haicc: missing argument: target" "and passed through: said by the mrepo it lands in"
 out=$(haicc host 2>&1); is $? 2 "haicc host, no command: exit 2 at the command line"
-out=$(haicc . protocol/activate . service 2>&1 >/dev/null); is "$out" "haicc: not now: protocol activate (protocol is not active)" "activating a protocol is the hooks', not a command from outside"
+is "$(haicc --output . protocol/activate . crud 2>&1)" '{"activated":"crud"}' "the protocol protocol open from outside: the restrictions lifted for base"
 out=$(haicc . deploy/teardown host 2>&1 >/dev/null); is $? 1 "a protocol that is not there: exit 1"
-is "$out" "haicc: no protocol: deploy (boot, crud, haicc, info, runtime)" "said, with the protocols there"
+is "$out" "haicc: no protocol: deploy (boot, crud, haicc, info, protocol, runtime)" "said, with the protocols there"
 out=$(haicc . boot/remove host 2>&1 >/dev/null); is "$out" "haicc: no action: boot remove (deploy, redeploy, teardown)" "an action that is not there: said, with the protocol's actions"
 
 # 9. a node inside the host; commands chained through both
@@ -262,6 +262,28 @@ is "$(haicc --output host/swarms/swarm-1 crud/read . 2>&1)" '[{"uri":["main","sw
 is "$(haicc --output 'host/swarms/*' crud/read . 2>&1)" '[{"at":"swarms/swarm-1","value":[{"uri":["main","swarms/swarm-1","."],"value":{},"children":[]}]}]' "a query through the shortcut: selected in the host"
 is "$(haicc --output . crud/read swarms 2>&1)" '[]' "nothing of it in the boot mrepo: each mrepo its own main"
 
+# 9a. scripts: haicc/script, its lines run where the haicc points, each
+# after the one before; a heredoc on stdin; the install's scripts by name
+# (haicc/file, haicc scripts); a line that fails; an mrepo by its
+# registry reference
+out=$(haicc --output host haicc/script . 'crud/create notes/s
+crud/read notes/s' 2>&1); is $? 0 "haicc host haicc/script . '<lines>': two lines run at the host"
+has "$out" '"line":"crud/read notes/s"' "each line with what it answered"
+has "$out" '"uri":["main","notes/s"]' "the second saw what the first made: one after the other"
+out=$(printf 'crud/read notes/s\n' | haicc --output host haicc/script . 2>&1); has "$out" '"line":"crud/read notes/s"' "haicc host haicc/script . with a heredoc: the lines from stdin"
+out=$(haicc --output host haicc/script notes 'crud/read s' 2>&1); has "$out" '"uri":["main","notes","s"]' "haicc host haicc/script notes '...': its lines run at notes in the host (the position its own segment)"
+is "$(haicc scripts 2>&1)" "" "haicc scripts: none kept yet"
+mkdir -p "$T/home/scripts"; printf '# a check\ncrud/read notes/s\n' > "$T/home/scripts/check.haicc"
+is "$(haicc scripts 2>&1)" "check" "haicc scripts: the install's scripts, by name"
+out=$(haicc --output host haicc/file . check 2>&1); is $? 0 "haicc host haicc/file . check: the install's script, read here, run at the host"
+has "$out" '"line":"crud/read notes/s"' "its lines sent as haicc/script"
+out=$(haicc host haicc/file . nope 2>&1 >/dev/null); is $? 3 "a script the install has not: exit 3"
+out=$(haicc host haicc/script . 'crud/read notes/s
+nosuch/thing' 2>&1 >/dev/null); is $? 1 "a line that fails: exit 1"
+has "$out" "line 2: nosuch/thing" "said, which line"
+out=$(haicc --output registry/local/host crud/read notes/s 2>&1); has "$out" '"uri":["main","notes/s"]' "haicc registry/local/host ...: the host by its registry reference, where the registry says it is linked"
+haicc host crud/delete notes recurse >/dev/null 2>&1
+
 # 9b. a request's log, and its flags: info unasked; --flags log=verbose,
 # log=debug, after a URI: that step's, held down the chain; a flag that is
 # none
@@ -298,12 +320,14 @@ has "$out" '"uri":["main","registry/local","host"]' "haicc registry/local crud/r
 has "$out" '"uri":"local/host","at":"host","how":"deployed","folder":"../local/host","package":"haiccing/base-component-haicc"' "what the install knows of it: which mrepo, linked where, how it came, where it is, what it came from"
 is "$(haicc --output host crud/read registry 2>&1)" '[]' "no registry in the host: the boot mrepo keeps it"
 # a continuation: a deploy asked for a script of its package answers with
-# it, and the haicc command goes on with it: a command after the response
-# of the one before
+# it, and the haicc command sends it on to the root, haicc/script with the
+# deployed mrepo as its URI: its lines executed there, each after the one
+# before
 out=$(haicc . boot/deploy demo base-component-haicc --flags continuation=start 2>&1); is $? 0 "haicc . boot/deploy demo base-component-haicc --flags continuation=start: the deploy, then its script, each command done"
 has "$out" '"continuation": {' "the deploy's response: its continuation, the script"
-has "$out" 'haicc demo service/initialise' "each command of it said as it would be typed, written from the deployed mrepo's place"
-has "$out" 'haicc demo service/start' "in order"
+has "$out" 'haicc . haicc/script demo' "the script sent on as one command to the root, its URI the deployed mrepo"
+has "$out" '"line": "service/initialise"' "its lines executed there, each with what it answered"
+has "$out" '"line": "service/start"' "in order"
 is "$(haicc --output demo crud/read . 2>&1)" '[{"uri":["main","."],"value":{},"children":[]}]' "the mrepo brought into service by it: its crud answering"
 out=$(haicc . boot/deploy demo-2 base-component-haicc --flags continuation=nope 2>&1 >/dev/null); has "$out" "no script: nope (haiccing/base-component-haicc has cluster, start)" "a script the package has not: refused, with those it has"
 [ ! -e "$T/home/work/mrepos/local/demo-2" ] && ok "nothing built for it" || no "nothing built for it"
