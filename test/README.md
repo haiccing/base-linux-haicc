@@ -4,7 +4,7 @@ The haicc command tested end to end as it is installed, from the installer to a 
 
 `sh test/run.sh` works in a temporary folder, removed after, and leaves
 nothing running. It needs a sources folder with the packages' bundles and
-Bare's tarball: `SOURCES`, else the development repository's `sources/`;
+Bare's tarball: `SOURCES`, else `../../sources`, beside the packages;
 without one it is skipped. `--keep` leaves the folder and its runtimes to
 inspect. One line a check, the count last; exit 0 passed, 1 failed.
 
@@ -40,6 +40,9 @@ inspect. One line a check, the count last; exit 0 passed, 1 failed.
 9. **A node inside the host**, deployed by a command passed through;
    commands chained through both shortcuts; a URI running through a
    shortcut; an argument with spaces and quotes; the output alone.
+   **Flags**: `--flags help` answered where the command would run,
+   nothing of it executed, through a chain too; a flag that is none, or
+   help not on the last command: not run, exit 1, said why.
 10. **Torn down**: the node; the service stopped, its boot protocol
     deactivated; shut down; the host.
 11. **The boot again**: there already, kept.

@@ -78,13 +78,40 @@ label=start; step --output splectral/help service/start; has "$out" '"state":"st
 # its pages, as a browser asks them
 get /help/; is "$code" 200 "its top page"
 has "$PAGE" "<title>docs</title>" "the docs mrepo's top"
-has "$PAGE" '<a href="/help/hdlc">hdlc</a>' "the keywords below, links to the same view"
+has "$PAGE" '<a href="/help/" class="on" aria-current="page">help</a>' "in the site: its tab, shown"
+has "$PAGE" '<a href=&quot;hdlc&quot;>hdlc</a>' "the keywords below, links to the same view, relative to its section"
+has "$PAGE" '<base href=&quot;/help/&quot; target=&quot;_top&quot;>' "its page embedded in the site, its base its section's own address"
 get /help/hdlc/validation; is "$code" 200 "a page by its keywords"
 has "$PAGE" "Before every commit" "as haicc docs info/get hdlc/validation answers it, drawn"
 has "$PAGE" '<code>haicc docs info/get hdlc/validation</code>' "the command it shows"
 get "/help/?at=splectral"; has "$PAGE" "<title>splectral</title>" "another mrepo, by its position: Splectral answering about itself"
+get "/help/?at=."; has "$PAGE" '<code>haicc . info/get</code>' "the root, as the command line names it"
+# the navigation: a drop-down the mrepo, the install's as the server knows them; one a level, its choices its parent's answer
+get /help/hdlc/validation
+has "$PAGE" '<option value=&quot;./?at=splectral%2Fhelp&quot;>' "the mrepo's drop-down: the install's mrepos, the component's own among them"
+has "$PAGE" '<option value=&quot;hdlc/validation&quot; selected>validation</option>' "a level a keyword: validation chosen, among hdlc's below"
+# raw, like for like: the response as the terminal prints it (no terminal: to 80), the same output
+cli=$(haicc docs info/get hdlc/validation)
+get "/help/hdlc/validation?raw"; is "$code" 200 "raw: the command's response whole"
+# (the page's text: in the site's srcdoc, escaped twice, the site's then the page's)
+raw=$(awk '{ a = a $0 "\n" } END { o = "<pre class=&quot;raw&quot;><code>"; s = index(a, o); e = index(a, "</code></pre>"); if (s && e) printf "%s", substr(a, s + length(o), e - s - length(o)) }' "$T/page" \
+  | sed -e 's/&quot;/"/g' -e 's/&amp;/\&/g' -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&quot;/"/g' -e "s/&#39;/'/g" -e 's/&amp;/\&/g')
+tail_of () { printf '%s\n' "$1" | sed -n '/^      "output": /,$p'; }
+[ -n "$(tail_of "$cli")" ] && [ "$(tail_of "$cli")" = "$(tail_of "$raw")" ] && ok "raw: its output printed line for line as the command line prints it" || no "raw: like for like" "$(printf '%s' "$raw" | head -c 300)"
+has "$raw" '"command": ["haicc","docs","info/get","hdlc/validation"]' "raw: the command as a terminal sends it"
+# the command box: a command as typed after haicc, answered with help where it would run, not run
+get "/help/?cmd=docs%20info%2Fget%20hdlc"; is "$code" 200 "a command typed: a page"
+has "$PAGE" 'taken here, now' "its help: the door's answer here and now"
+has "$PAGE" '<code>haicc docs info/get hdlc</code></dd>' "the command to run it, its position in front"
+has "$PAGE" '<code>haicc docs info/get hdlc --flags help</code>' "sent with the help flag: nothing of it run"
+get "/help/?cmd=.%20boot%2Fteardown%20docs"; has "$PAGE" 'taken here, now' "a teardown typed: answered"
+get /help/; is "$code" 200 "and the docs mrepo still there: nothing run"
+# the site: the URI chopped, the site serving /, Splectral's own page its first tab
+get /; has "$PAGE" '<a href="/install" class="on" aria-current="page">install</a><a href="/help/">help</a>' "the site: its own page shown, the component a tab"
+has "$PAGE" "srcdoc=" "its own page embedded in the content area"
+get /install; has "$PAGE" '<a href="/install" class="on"' "its own page at its own URI"
 get /help/no/such/thing; is "$code" 200 "a keyword that is not there: a page all the same"
-has "$PAGE" 'class="error"' "its error said on it"
+has "$PAGE" 'class=&quot;error&quot;' "its error said on it"
 for i in 1 2 3; do get /help/hdlc/validation; done
 get /records; has "$PAGE" '"command":"haicc docs info/get hdlc/validation"' "its data requests: commands in the install's record, as a terminal's"
 is "$(ls "$F/splectral/inbox" "$F/splectral/outbox" | grep -c json)" 0 "its boxes empty: each record taken removed"
