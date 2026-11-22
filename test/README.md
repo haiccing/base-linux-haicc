@@ -21,6 +21,9 @@ inspect. One line a check, the count last; exit 0 passed, 1 failed.
    is not there.
 5. **The prerequisites**: a check changes nothing; `haicc prereq` unpacks
    the pinned Bare from the sources and records its hash; there next time.
+   Bare chosen by machine: every pinned platform's in the sources; an
+   `aarch64` machine (`uname` answering as one would) chooses
+   `linux-arm64`'s, a platform not pinned is said.
    From here the command is the app: its usage whole; no such command; a
    URI with no command after it; `haicc boot` alone; `--output` without a
    URI; no boot mrepo yet; the backup off and on; a folder linked twice
@@ -41,8 +44,12 @@ inspect. One line a check, the count last; exit 0 passed, 1 failed.
    commands chained through both shortcuts; a URI running through a
    shortcut; an argument with spaces and quotes; the output alone.
    **Flags**: `--flags help` answered where the command would run,
-   nothing of it executed, through a chain too; a flag that is none, or
-   help not on the last command: not run, exit 1, said why.
+   nothing of it executed, through a chain too, by default in natural
+   language; `--flags feedback <text>` recorded where the command would
+   run, nothing of it executed, answered with its request's id and read
+   back from the request layer, asked directly too; a flag that is none,
+   help not on the last command, feedback with no text or where `haici`
+   is not: not run, exit 1, said why.
 10. **Torn down**: the node; the service stopped, its boot protocol
     deactivated; shut down; the host.
 11. **The boot again**: there already, kept.

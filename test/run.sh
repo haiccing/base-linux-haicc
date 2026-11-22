@@ -17,7 +17,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 pkg=$(cd "$here/.." && pwd)
 keep=no
 [ "${1:-}" = --keep ] && keep=yes
-. "$pkg/pins"
+HAICC_HOME=$pkg . "$pkg/bin/haicc-lib.sh"   # the pins, this machine's Bare chosen
 SOURCES=${SOURCES:-$pkg/../../sources}
 for f in "$HAICC_ORG/$APP_PACKAGE.bundle" "$HAICC_ORG/base-component-boot.bundle" "$HAICC_ORG/base-component-haicc.bundle" "$HAICC_ORG/manifest.json" "$BARE_FILE"; do
   [ -f "$SOURCES/$f" ] || { echo "skipped: no $f in $SOURCES (SOURCES: a sources folder)"; exit 0; }
@@ -87,6 +87,21 @@ is "$("$T/home/bare/bin/bare" --version 2>/dev/null)" "v$BARE_VERSION" "the pinn
 is "$(cat "$T/home/bare/tarball.sha512")" "$BARE_SHA512" "its tarball's sha512 recorded: the pin"
 out=$(haicc prereq --check); is $? 0 "haicc prereq --check: all there now"
 has "$out" "ok       bare: $BARE_VERSION, as pinned" "Bare there, as pinned: kept"
+
+# Bare chosen by machine: a build a platform pinned, each in the sources; a
+# machine of another platform (uname answering as it would) chooses its own,
+# one not pinned is said
+for p in $BARE_PLATFORMS; do
+  eval "f=\${BARE_$(printf '%s' "$p" | tr - _)_FILE:-}"
+  [ -n "$f" ] && [ -f "$SOURCES/$f" ] && ok "Bare for $p: pinned, in the sources" || no "Bare for $p: pinned, in the sources" "$f"
+done
+mkdir -p "$T/uname"
+printf '#!/bin/sh\ncase "$1" in -m) echo "$UNAME_M" ;; *) echo Linux ;; esac\n' > "$T/uname/uname"; chmod +x "$T/uname/uname"
+out=$(UNAME_M=aarch64 PATH=$T/uname:$PATH haicc prereq --check)
+has "$out" "ok       platform: linux-arm64" "an aarch64 machine: linux-arm64, pinned"
+has "$out" "missing  bare: not put in place yet" "its own Bare chosen: in the sources, not the one in place"
+out=$(UNAME_M=riscv64 PATH=$T/uname:$PATH haicc prereq --check); is $? 3 "a machine of a platform not pinned: exit 3"
+has "$out" "missing  platform: this is linux-riscv64, Bare is pinned for $BARE_PLATFORMS" "said, with the platforms pinned"
 
 # from here the command is the app, run with the Bare just put in place
 out=$(haicc --help); is $? 0 "haicc --help, Bare there"
@@ -213,7 +228,7 @@ out=$(haicc host boot/deploy 2>&1 >/dev/null); is "$out" "haicc: missing argumen
 out=$(haicc host 2>&1); is $? 2 "haicc host, no command: exit 2 at the command line"
 is "$(haicc --output . protocol/activate . crud 2>&1)" '{"activated":"crud"}' "the protocol protocol open from outside: the restrictions lifted for base"
 out=$(haicc . deploy/teardown host 2>&1 >/dev/null); is $? 1 "a protocol that is not there: exit 1"
-is "$out" "haicc: no protocol: deploy (boot, crud, haicc, help, info, protocol, runtime)" "said, with the protocols there"
+is "$out" "haicc: no protocol: deploy (boot, crud, haicc, haici, help, info, protocol, runtime)" "said, with the protocols there"
 out=$(haicc . boot/remove host 2>&1 >/dev/null); is "$out" "haicc: no action: boot remove (deploy, redeploy, teardown)" "an action that is not there: said, with the protocol's actions"
 
 # 9. a node inside the host; commands chained through both
@@ -250,8 +265,28 @@ out=$(haicc --output . boot/teardown host --flags help 2>&1); has "$out" '"door"
 is "$(running | wc -l | tr -d ' ')" 3 "nothing of it executed: the host and its node still running"
 out=$(haicc --output host haicc node-1 crud/read . --flags help 2>&1); has "$out" '"door":"refused here: no protocol: crud' "through a chain: answered by the node, where it would run (no crud there)"
 out=$(haicc host crud/read swarms --flags nope 2>&1 >/dev/null); is $? 1 "a flag that is none: not run, exit 1"
-is "$out" "haicc: not run: no flag: nope (container, continuation, help, layer, log)" "said why"
+is "$out" "haicc: not run: no flag: nope (container, continuation, feedback, help, layer, log)" "said why"
 out=$(haicc host --flags help -- crud/read swarms 2>&1 >/dev/null); is "$out" "haicc: not run: help: on the last command only (it rewrites the command it is on)" "help on a command that passes its words on: not the last, not run"
+out=$(haicc host crud/read swarms --flags help 2>&1); has "$out" "To run it: crud/read swarms" "by default its answer in natural language, a line each"
+hasnt "$out" '"topic":' "not the record (--raw for it)"
+# feedback: --flags feedback <text> on any command records it where the
+# command would run, nothing of it executed, answered with its request's
+# id; read back from the request layer (the store), through the chain
+out=$(haicc host crud/read swarms --flags feedback the list is empty, a swarm was expected 2>&1); is $? 0 "haicc host crud/read swarms --flags feedback <text>: recorded, exit 0"
+id=$(printf '%s\n' "$out" | sed -n 's/^Feedback on crud\/read swarms recorded: request \([0-9a-f-]*\)\.$/\1/p')
+[ -n "$id" ] && ok "answered in natural language: the command as understood, its request's id" || no "answered in natural language: the command as understood, its request's id" "$out"
+has "$out" "To read it back: crud/read done/$id.json --flags layer=request" "the command to read it back, as typed after the position"
+out=$(haicc --output host crud/read "done/$id.json" --flags layer=request 2>&1); is $? 0 "read back: haicc host crud/read done/<id>.json --flags layer=request"
+has "$out" '"protocol":"haici","action":"feedback","uri":["main","swarms"],"args":["the list is empty, a swarm was expected","crud/read"]' "its record: haici/feedback at the command's URI, the text, then the command"
+has "$out" '"rewritten":"feedback"' "made by the flag"
+has "$out" "\"output\":{\"feedback\":\"recorded\",\"on\":\"crud/read swarms\",\"id\":\"$id\"" "its answer kept with it"
+out=$(haicc --output host crud/read "done/*[value/value/protocol='haici']" --flags layer=request 2>&1); has "$out" "\"key\":\"$id\"" "all the feedback there: the request layer read by protocol"
+out=$(haicc --output . boot/teardown host --flags feedback do not, it is in use 2>&1); has "$out" '"on":"boot/teardown host"' "haicc . boot/teardown host --flags feedback <text>: recorded at the root"
+is "$(running | wc -l | tr -d ' ')" 3 "nothing of it executed: the host and its node still running"
+out=$(haicc --output host haici/feedback swarms "asked directly" crud/read 2>&1); has "$out" '"on":"crud/read swarms"' "asked directly: haicc host haici/feedback swarms <text> crud/read"
+out=$(haicc host crud/read swarms --flags feedback 2>&1 >/dev/null); is $? 1 "feedback with no text: not run, exit 1"
+is "$out" "haicc: not run: feedback: its text follows it (--flags feedback <text>)" "said why"
+out=$(haicc host haicc node-1 crud/read . --flags feedback hm 2>&1 >/dev/null); is "$out" "haicc: not run: feedback: no protocol haici here" "through a chain to an mrepo without haici (the runtime alone): not run, said"
 
 # 9b. structure in main: nodes created, read and deleted with crud; at the
 # root (the boot mrepo: crud active from its boot) and in the host (behind
@@ -338,7 +373,7 @@ has "$out" '"run":false' "completed, not failed: not run"
 has "$out" '"event":"request.flag"' "each reason a warning in its log"
 hasnt "$out" '"event":"crud.read.' "nothing of the command executed"
 out=$(haicc --raw host --flags nope log=verbose -- crud/read . 2>&1); is "$?" "1" "a flag there is none of, before the --: that step not run, exit 1"
-has "$out" '"why":["no flag: nope (container, continuation, help, layer, log)"]' "said why"
+has "$out" '"why":["no flag: nope (container, continuation, feedback, help, layer, log)"]' "said why"
 hasnt "$out" '"event":"crud.read.' "the command after it not sent on"
 out=$(haicc host --flags log=debug crud/read . 2>&1 >/dev/null); is "$?" "1" "a list not closed where a command follows: exit 1"
 has "$out" "no command after the flags of haicc (-- closes a flag list, the command follows it)" "said: only -- or the end of the command closes a list"
