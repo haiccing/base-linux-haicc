@@ -8,6 +8,8 @@ local folder, which installs offline and repeats exactly.
 
 ## Steps
 
+**At the machine**: these steps install the `haicc` command itself, before any mrepo: an `sh` procedure, no `steps.haicc`; run end to end by `test/run.sh`.
+
 ```sh
 # the installer: the scripts and the pins
 curl -fsSLO https://github.com/haiccing/base-linux-haicc/releases/latest/download/haicc-install.sh

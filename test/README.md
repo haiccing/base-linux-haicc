@@ -139,3 +139,16 @@ its commission failed at its first component, nothing of it left; the
 workbench torn down, its decommission taking its components with it;
 nothing left. Each step timed, the pages too. It needs the
 splectral packages' and the workbench's bundles in the sources.
+
+## How-tos
+
+`sh test/howtos.sh [--keep] [<org>/<package>/<name>...]` runs every
+how-to with a script (or those named) where it is installed: an install
+in a temporary folder, a how-to's boot deployed in it at `howtos`
+(`haiccing/base-package-howto`), each how-to run through with `howto/run
+. <key>`, one after the other, each throwing the scene away first; what
+did not pass printed under it, as the runner says it. One that needs
+Docker (`# needs: docker`) is skipped, with the reason, when no daemon
+answers. The scene thrown away last, torn down, nothing left running, no
+container left. Each how-to timed. It needs the splectral packages'
+bundles in the sources, for Splectral's how-tos.
