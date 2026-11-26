@@ -75,6 +75,31 @@ inspect. One line a check, the count last; exit 0 passed, 1 failed.
     second time, a repeat, a warning, exit 0; `haicc boot/deploy` brings
     it back.
 
+## The working set
+
+`sh test/core.sh` (`--keep` as above) is the same end to end for what is
+brought to the request so far (`base-docs-hdlc`, "Schema migration");
+`run.sh` is the whole, for after the migration.
+
+1. **Installed**, the sources linked, Bare put in place; an mrepo
+   command before the boot says what is missing.
+2. **The boot**, `haicc boot/deploy`: a program, a line a step (the
+   boot mrepo built, its packages placed, its runtime started), its
+   outcome the last line; nothing deployed by it.
+3. **A command for the mrepos**: what it says printed
+   (`haicc/mrepos`); the schema registry's skeleton mounted by the warm
+   boot, before anything was taken in; a protocol not brought over, an
+   argument missing, a flag there is none of: failed, on stderr, exit 1.
+4. **A child deployed from the runtime package**, `haicc . boot/deploy
+   rt ...`: what it says, its commission done, its service started; in
+   the install's registry; deployed again, a repeat.
+5. **Commands at its position**, sent on: its validation tests run in
+   it (`runtime/run ... validate-in-situ`), its info, its service;
+   `--request`, the whole request, the request it became linked;
+   refused there, said here; `--raw`.
+6. **Torn down**: the child; the boot again, kept; the machine level,
+   `haicc boot/teardown`, and again, a repeat.
+
 ## A swarm
 
 `sh test/swarm.sh` (`--keep` as above) tries a swarm on one host, end to
