@@ -85,10 +85,13 @@ brought to the request so far (`base-docs-hdlc`, "Schema migration");
    command before the boot says what is missing.
 2. **The boot**, `haicc boot/deploy`: a program, a line a step (the
    boot mrepo built, its packages placed, its runtime started), its
-   outcome the last line; nothing deployed by it.
+   outcome the last line.
 3. **A command for the mrepos**: what it says printed
-   (`haicc/mrepos`); the schema registry's skeleton mounted by the warm
-   boot, before anything was taken in; a protocol not brought over, an
+   (`haicc/mrepos`: the boot mrepo and the schema registry, the fixture
+   its boot hook deployed, before anything was taken in): its types by
+   URI, one type with its fingerprint, loaded again, its validation
+   tests run in it; the install's mrepos by their folders, the warm
+   boot's validation tests run in the boot mrepo; a protocol not brought over, an
    argument missing, a flag there is none of: failed, on stderr, exit 1.
 4. **A child deployed from the runtime package**, `haicc . boot/deploy
    rt ...`: what it says, its commission done, its service started; in

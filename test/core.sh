@@ -1,5 +1,4 @@
 #!/bin/sh
-# The haicc command, tested end to end as it is installed: from the installer
 # The haicc command end to end, the working set: what is brought to the
 # request so far (base-docs-hdlc, "Schema migration"). From the installer to
 # an install booted, a child deployed from the runtime package, its
@@ -62,18 +61,26 @@ out=$(haicc boot/deploy 2>&1); is $? 0 "haicc boot/deploy"
 has "$out" "Built local/boot at $W/mrepos/boot, from $HAICC_ORG/base-component-boot:" "a line a step: the boot mrepo built, where, from what"
 has "$out" "  $HAICC_ORG/base-package-warm-boot" "its packages placed, each named: the warm boot among them"
 is "$(printf '%s\n' "$out" | tail -n 1 | sed 's/pid [0-9]*/pid N/')" "Booted: local/boot is running, pid N, at $W." "its outcome, the last line"
-is "$(running | wc -l | tr -d ' ')" 1 "one runtime running: the boot mrepo's"
-[ ! -e "$W/mrepos/local/host" ] && ok "nothing deployed by the boot" || no "nothing deployed by the boot"
 
 # 4. a command for the mrepos: what it says printed. The first one waits
-# behind the boot hook (the warm boot, the activations): nothing is taken
-# in before it is done
+# behind the boot hook (the schema registry deployed, the activations): nothing is taken in before it is done
 out=$(haicc . haicc/mrepos); is $? 0 "haicc . haicc/mrepos"
-is "$out" "1 mrepo in the install's registry.
-local/boot at ., from $HAICC_ORG/base-component-boot, running." "the install's registry: the boot mrepo alone"
-for t in record request attachment; do [ -f "$W/mrepos/local/avro-registry/avro/$HAICC_ORG/base-package-runtime/$t.avsc" ] || t=missing; done
-is "$t" attachment "the schema registry's skeleton mounted where the registry is, by the warm boot: the runtime's types"
-out=$(haicc . warm-boot/types); has "$out" "$HAICC_ORG/base-package-runtime/request" "the types mounted, by their URIs"
+is "$out" "2 mrepos in the install's registry.
+local/avro-registry at avro-registry, from $HAICC_ORG/base-component-avro-registry, running.
+local/boot at ., from $HAICC_ORG/base-component-boot, running." "the install's registry: the boot mrepo and the schema registry, the fixture its boot hook deployed"
+is "$(running | wc -l | tr -d ' ')" 2 "two runtimes running: the boot mrepo's, the schema registry's"
+[ -d "$W/mrepos/local/avro-registry/.git" ] && [ ! -e "$W/mrepos/local/avro-registry/avro" ] && ok "the schema registry deployed at its fixed position: its repository, no folder of types beside it" || no "the schema registry deployed at its fixed position"
+out=$(haicc . warm-boot/mrepos); has "$out" "local/avro-registry, in local/avro-registry." "the install's mrepos by their folders (the warm boot): the registry among them"
+out=$(haicc avro-registry avro-registry/types); is $? 0 "haicc avro-registry avro-registry/types"
+has "$out" "$HAICC_ORG/base-package-runtime/request" "the registry's types, by URI"
+out=$(haicc avro-registry avro-registry/get "$HAICC_ORG/base-package-runtime/request"); has "$out" "Its fingerprint: " "one type: its fingerprint"
+has "$out" "Attached: $HAICC_ORG/base-package-runtime/request (avro/string)" "its schema attached, a text"
+has "$out" '"name": "haiccing.basePackageRuntime.request"' "shown as it is stored, from the attachment"
+out=$(haicc avro-registry avro-registry/load); has "$out" "In its main: 0 added, 0 written again" "loaded again: every type a contract, nothing to write (its commission loaded it into its main)"
+out=$(haicc avro-registry runtime/run . "packages/$HAICC_ORG/base-component-avro-registry/test/validate-in-situ" 2>&1); is $? 0 "the registry's validation tests, run in it"
+has "$out" "Passed: /test/validate-in-situ" "passed"
+out=$(haicc . runtime/run . "packages/$HAICC_ORG/base-package-warm-boot/test/validate-in-situ" 2>&1); is $? 0 "the warm boot's validation tests, run in the boot mrepo"
+has "$out" "Passed: /test/validate-in-situ" "passed"
 out=$(haicc . crud/read . 2>&1); is $? 1 "a protocol not brought to the request yet: failed, exit 1"
 has "$out" "haicc: Refused, nothing run." "said on stderr: refused"
 has "$out" "no protocol: crud (" "and why"
@@ -88,7 +95,7 @@ has "$out" "Deployed rt as local/rt, from $HAICC_ORG/base-package-runtime." "wha
 has "$out" "Its commission is done." "its commission waited for"
 has "$out" "Its service is started." "its service as its commission left it"
 [ -d "$W/mrepos/local/rt/.git" ] && ok "placed by its unique URI: mrepos/local/rt" || no "placed by its unique URI"
-is "$(running | wc -l | tr -d ' ')" 2 "two runtimes running"
+is "$(running | wc -l | tr -d ' ')" 3 "three runtimes running"
 out=$(haicc . haicc/mrepos local/rt); has "$out" "local/rt at rt, from $HAICC_ORG/base-package-runtime, running." "in the install's registry, running"
 out=$(haicc . boot/deploy rt "$HAICC_ORG/base-package-runtime"); is $? 0 "deployed again: a repeat, exit 0"
 has "$out" "rt is deployed already, as local/rt" "said: deployed already, nothing done"
@@ -98,8 +105,8 @@ out=$(haicc rt runtime/run . "packages/$HAICC_ORG/base-package-runtime/test/vali
 has "$out" "Passed: /test/validate-in-situ of $HAICC_ORG/base-package-runtime, 3 units." "its validation tests, run in it: passed"
 has "$out" "/test/types: passed" "its types among them"
 out=$(haicc rt info/get); is $? 0 "haicc rt info/get"
-has "$out" ".: The mrepo runtime: the engine every mrepo runs on." "its info, the page asked for, said"
-has "$out" "Attached: " "its page attached, a line"
+has "$out" ".: The mrepo runtime: the engine every mrepo runs on." "its info: what the page asked for is, said"
+has "$out" "Attached: base-package-runtime (avro/string)" "its page attached, a text, shown below its line"
 out=$(haicc rt service/start); has "$out" "The service was started already: nothing moved." "haicc rt service/start: a repeat, said"
 out=$(haicc --request rt service/stop); is $? 0 "haicc --request: the whole request"
 has "$out" '"status": "done"' "returned done"
@@ -116,7 +123,7 @@ has "$out" "Torn down rt (local/rt): its runtime stopped" "said: its runtime sto
 out=$(haicc boot/deploy 2>&1); is $? 0 "the boot again"
 has "$out" "local/boot is built already" "there already: kept"
 out=$(haicc boot/teardown 2>&1); is $? 0 "haicc boot/teardown"
-has "$out" "Torn down the install at $W: 1 runtime stopped, 0 containers removed" "said: the install torn down, its runtime stopped"
+has "$out" "Torn down the install at $W: 2 runtimes stopped, 0 containers removed" "said: the install torn down, its runtimes stopped (the boot mrepo's, the schema registry's)"
 is "$(running | wc -l | tr -d ' ')" 0 "no process of the install left"
 [ ! -e "$W/mrepos" ] && [ ! -e "$W/packages" ] && ok "the mrepos and the package store removed" || no "the mrepos and the package store removed"
 out=$(haicc boot/teardown 2>/dev/null); is $? 0 "torn down twice: a repeat, exit 0"
