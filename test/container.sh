@@ -1,6 +1,6 @@
 #!/bin/sh
 # The haicc command installed in a container, as on a machine, from the
-# host's sources: the prerequisite of a node run in its container. A plain
+# host's sources: the prerequisite of a peer run in its container. A plain
 # Debian container, nothing of haicc in its image: the installer, the
 # sources mounted read only at the same path as on the host and linked,
 # Bare put in place from them, the boot, a host in service, commands, the
@@ -29,7 +29,7 @@ no () { n=$((n + 1)); failed=$((failed + 1)); echo "not ok $n - $1"; [ -z "${2:-
 is () { if [ "$1" = "$2" ]; then ok "$3"; else no "$3" "got: $1; expected: $2"; fi; }
 has () { case "$1" in *"$2"*) ok "$3" ;; *) no "$3" "got: $1; expected in it: $2" ;; esac; }
 
-# The image: a plain base, the one the nodes' containers are made from.
+# The image: a plain base, the one the peers' containers are made from.
 IMAGE=debian:bookworm-slim
 T=$(mktemp -d "${TMPDIR:-/tmp}/haicc-container.XXXXXX")
 chmod 777 "$T"

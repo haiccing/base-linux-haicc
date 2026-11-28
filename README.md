@@ -28,7 +28,7 @@ downloaded over https, or a sources folder linked. The how-to `install`.
 |---|---|
 | `haicc sources link <folder>` | a local folder linked as a source, not copied: Bare's runtime and the packages come from it |
 | `haicc sources download bare` | Bare's runtime fetched over https into haicc's own sources folder, checked against its pin |
-| `haicc sources download <org>...` | an organisation's packages fetched over https into the same folder, haiccing's and each platform's (`base-docs-haicc`, "Platforms"): the manifest from the latest release of its documentation package (`<org>/base-docs-<platform>`, haiccing's `base-docs-haicc`), then each package's bundle and addons from its own release (`r-<commit>`), each checked against the manifest (sha256); the manifest written last, `github:<org>` registered. A package alone is not downloaded. `HAICC_RELEASES` names another base than `https://github.com` |
+| `haicc sources download <org>...` | an organisation's packages fetched over https into the same folder, haiccing's and each platform's (`base-docs-haicc`, "Platforms"): the manifest from the latest release of its documentation package (`<org>/base-docs-<platform>`, haiccing's `base-docs-haicc`), then each package's bundle and addons from its own release (`r-<commit>`), each checked against the manifest (sha256); the manifest written last; the folder registered in the internal list, `github:<org>` in the external. A package alone is not downloaded. `HAICC_RELEASES` names another base than `https://github.com` |
 | `haicc prereq [--check]` | what the command needs to start, checked: the platform, the tools, a source holding the app, Bare; Bare unpacked from the sources |
 | `haicc --help` | these, then the app's when it can be started |
 
@@ -43,7 +43,8 @@ exits 3.
 ~/.haicc/
   bin/            the scripts
   pins            the pinned Bare (a build a platform), the organisation, the app's package
-  sources.list    the sources registered, the app's list too
+  sources.list    the internal list: the install's folders, what the platform reads
+  external.list   the external list: a record of where each download came from (github:<org>), never read inside
   sources/        what haicc sources download fetched: Bare, the packages
   bare/           Bare, unpacked by haicc prereq
   work/           the app's work folder
@@ -57,8 +58,13 @@ exits 3.
 
 ## Network
 
-Only `haicc sources download` reaches the network. An install from
-a linked sources folder is offline and repeats exactly.
+The download is the boundary process for the sources: it reaches the
+network, checks what it fetches (Bare by its pin, the packages by their
+manifest), and fills the sources folder; inside, the platform reads
+local folders only and trusts them. An install from a linked sources
+folder is offline and repeats exactly. Not air-gapped yet: a pair's
+container image (`docker run debian:bookworm-slim`) is pulled from
+inside.
 
 ## Platforms
 
@@ -72,8 +78,10 @@ pinned platform's native addons, and Bare loads its own.
 
 ## Not yet
 
-- The app's bundle is taken from the sources as it is: not checked
-  against its manifest.
+- No bundle from a linked folder is checked anywhere: the boot trusts
+  its sources as given, and the pre-boot check of them (`haicc
+  prereq` checking each folder's bundles and addons against its
+  manifest) is later. A download's are checked as it fetches them.
 
 ## Package
 

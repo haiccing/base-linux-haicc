@@ -1,7 +1,9 @@
 #!/bin/sh
 # The haicc command end to end, the working set: what is brought to the
-# request so far (base-docs-hdlc, "Schema migration"). From the installer to
-# an install booted, a child deployed from the runtime package, its
+# request so far (base-docs-hdlc, "Schema migration"). From the installer
+# (current, registering nothing) and a download from a file:// copy of the
+# releases, to an install booted past a github: line in sources.list
+# (handed folders only), a child deployed from the runtime package, its
 # validation tests run in it, and the teardown, in a temporary folder,
 # removed after. It leaves nothing running. (test/run.sh: the whole, for
 # after the migration.)
@@ -43,21 +45,59 @@ trap cleanup EXIT
 trap 'exit 130' INT TERM
 
 # 1. installed; the sources linked; Bare put in place
+sh "$pkg/build.sh" "$T/installer.sh" >/dev/null 2>&1 && cmp -s "$T/installer.sh" "$pkg/haicc-install.sh" && ok "the installer current: as build.sh writes it" || no "the installer current: as build.sh writes it" "run sh build.sh"
 out=$(sh "$pkg/haicc-install.sh" --home="$T/home" --bin="$T/bin" 2>&1)
 is $? 0 "installed: sh haicc-install.sh --home --bin"
+[ ! -e "$T/home/sources.list" ] && [ ! -e "$T/home/external.list" ] && ok "no source registered by the installer" || no "no source registered by the installer"
 PATH=$T/bin:$PATH; export PATH
 unset HAICC_HOME HAICC_WORK HAICC_REQUEST HAICC_RAW 2>/dev/null
 HAICC_TIMEOUT=180; export HAICC_TIMEOUT
 haicc sources link "$SOURCES" >/dev/null; is $? 0 "haicc sources link <folder>"
 out=$(haicc prereq); is $? 0 "haicc prereq: all there"
 W=$T/home/work
+# an install made before the split: a github: line in the internal list
+printf 'github:%s\n' "$HAICC_ORG" >> "$T/home/sources.list"
+has "$(haicc sources)" "github:$HAICC_ORG (in sources.list, not read: the install reads folders only)" "a github: line in sources.list: not read, said"
+
+# 1b. the download, the boundary process: haiccing's packages from a copy
+# of the releases' layout made from the sources (HAICC_RELEASES, file://),
+# into a home of its own; its manifest an asset of base-docs-haicc's latest
+# release, each package at its own release, r-<its commit>, with its addons
+rel=$T/releases
+(cd "$SOURCES" && tar -cf "$T/addons.tar" addons)
+mkdir -p "$rel/$HAICC_ORG/base-docs-haicc/releases/latest/download"
+cp "$SOURCES/$HAICC_ORG/manifest.json" "$rel/$HAICC_ORG/base-docs-haicc/releases/latest/download/"
+sed -n 's/^      "file": "\(.*\)",$/\1/p; s/^      "commit": "\(.......\).*/\1/p' "$SOURCES/$HAICC_ORG/manifest.json" | paste - - > "$T/released"
+while read -r f c; do
+  p=$(basename "$f" .bundle); d=$rel/$(dirname "$f")/$p/releases/download/r-$c
+  # (the addons' tar linked, not copied 30 times; a bundle copied: one is
+  # changed below, never the sources')
+  mkdir -p "$d"; cp "$SOURCES/$f" "$d/"; ln "$T/addons.tar" "$d/$p-addons.tar" 2>/dev/null || cp "$T/addons.tar" "$d/$p-addons.tar"
+done < "$T/released"
+sh "$pkg/haicc-install.sh" --home="$T/dl" --bin="$T/dlbin" >/dev/null 2>&1
+out=$(HAICC_RELEASES=file://$rel "$T/dlbin/haicc" sources download "$HAICC_ORG" 2>&1)
+is $? 0 "haicc sources download $HAICC_ORG: its packages fetched from their releases, checked"
+same=yes; while read -r f c; do cmp -s "$SOURCES/$f" "$T/dl/sources/$f" || same=no; done < "$T/released"
+is "$same" yes "every bundle there, as the manifest says"
+cmp -s "$T/dl/sources/$HAICC_ORG/manifest.json" "$SOURCES/$HAICC_ORG/manifest.json" && ok "the manifest written, as published" || no "the manifest written, as published"
+is "$(cat "$T/dl/external.list")" "github:$HAICC_ORG" "where it came from: in the external list only"
+is "$(cat "$T/dl/sources.list")" "folder:$T/dl/sources" "the internal list: the folder it filled, only"
+# a bundle not as its manifest says: refused at the boundary, not kept
+tag=r-$(sed -n "s|^$HAICC_ORG/$APP_PACKAGE.bundle\t||p" "$T/released")
+rm "$T/dl/sources/$HAICC_ORG/$APP_PACKAGE.bundle"
+printf x >> "$rel/$HAICC_ORG/$APP_PACKAGE/releases/download/$tag/$APP_PACKAGE.bundle"
+out=$(HAICC_RELEASES=file://$rel "$T/dlbin/haicc" sources download "$HAICC_ORG" 2>&1)
+is $? 3 "a bundle not as its manifest says: refused, exit 3"
+has "$out" "not as the manifest says (sha256)" "said"
+[ ! -e "$T/dl/sources/$HAICC_ORG/$APP_PACKAGE.bundle" ] && ok "and not kept" || no "and not kept"
 
 # 2. before the boot: an mrepo command says what is missing
 out=$(haicc . haicc/mrepos 2>&1); is $? 3 "an mrepo command before the boot: exit 3"
 has "$out" "no boot mrepo" "said: no boot mrepo (haicc boot/deploy)"
 
-# 3. the boot: a program, a line a step, its outcome last
-out=$(haicc boot/deploy 2>&1); is $? 0 "haicc boot/deploy"
+# 3. the boot: a program, a line a step, its outcome last; booting with
+# the github: line in sources.list (the boot refuses one): handed folders only
+out=$(haicc boot/deploy 2>&1); is $? 0 "haicc boot/deploy, a github: line in sources.list: the boot handed folders only"
 has "$out" "Built local/boot at $W/mrepos/boot, from $HAICC_ORG/base-component-boot:" "a line a step: the boot mrepo built, where, from what"
 has "$out" "  $HAICC_ORG/base-package-warm-boot" "its packages placed, each named: the warm boot among them"
 is "$(printf '%s\n' "$out" | tail -n 1 | sed 's/pid [0-9]*/pid N/')" "Booted: local/boot is running, pid N, at $W." "its outcome, the last line"

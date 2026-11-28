@@ -1,13 +1,13 @@
 #!/bin/sh
 # A swarm on one host, end to end: an install with a host in service; a
-# swarm made with its master and its lookup db; two nodes deployed into
+# swarm made with its master and its lookup db; two peers deployed into
 # it, each registered by the host; who is registered and active asked of
-# the host, the master and a node; a node resolved; a node gone quiet
+# the host, the master and a peer; a peer resolved; a peer gone quiet
 # when its service stops, active again when it starts; what is refused;
-# each node's requests in its own request log, read where it is; a
-# command dispatched from one node to another by its unique URI, through
+# each peer's requests in its own request log, read where it is; a
+# command dispatched from one peer to another by its unique URI, through
 # rns; the log viewer, a Splectral component, any mrepo's request log on
-# its page, asked over HTTP; a node taken out; torn down, nothing left.
+# its page, asked over HTTP; a peer taken out; torn down, nothing left.
 # Each step timed.
 #   sh test/swarm.sh [--keep]
 #     --keep    the temporary folder left as it is, its runtimes running (printed)
@@ -20,7 +20,7 @@ keep=no
 [ "${1:-}" = --keep ] && keep=yes
 HAICC_HOME=$pkg . "$pkg/bin/haicc-lib.sh"   # the pins, this machine's Bare chosen
 SOURCES=${SOURCES:-$pkg/../../sources}
-for f in "$HAICC_ORG/$APP_PACKAGE.bundle" "$HAICC_ORG/base-component-haicc.bundle" "$HAICC_ORG/base-component-node.bundle" "$HAICC_ORG/base-package-swarm.bundle" "$HAICC_ORG/base-package-rns.bundle" "$HAICC_ORG/base-package-dispatch.bundle" "$HAICC_ORG/base-package-splectral.bundle" splectral/base-component-log-viewer.bundle "$BARE_FILE"; do
+for f in "$HAICC_ORG/$APP_PACKAGE.bundle" "$HAICC_ORG/base-component-haicc.bundle" "$HAICC_ORG/base-component-peer.bundle" "$HAICC_ORG/base-package-swarm.bundle" "$HAICC_ORG/base-package-rns.bundle" "$HAICC_ORG/base-package-dispatch.bundle" "$HAICC_ORG/base-package-splectral.bundle" splectral/base-component-log-viewer.bundle "$BARE_FILE"; do
   [ -f "$SOURCES/$f" ] || { echo "skipped: no $f in $SOURCES (SOURCES: a sources folder)"; exit 0; }
 done
 SOURCES=$(cd "$SOURCES" && pwd)
@@ -47,9 +47,9 @@ trap 'exit 130' INT TERM
 haicc () { PATH=$T/bin:$PATH HAICC_HOME=$H HAICC_TIMEOUT=240 "$T/bin/haicc" "$@" 2>&1; }
 step () { s=$(ms); out=$(haicc "$@"); r=$?; echo "$label $(( $(ms) - s ))" >> "$TIMES"; return $r; }
 # a command asked again until its answer has a fragment in it, at most a
-# number of seconds: what a lease or a node's next turn brings about
+# number of seconds: what a lease or a peer's next turn brings about
 until_has () { secs=$1; want=$2; shift 2; i=0; while :; do out=$(haicc "$@"); case "$out" in *"$want"*) return 0 ;; esac; i=$((i + 1)); [ "$i" -ge $((secs * 2)) ] && return 1; sleep 0.5 2>/dev/null || sleep 1; done; }
-# the nodes of a status, each its unique URI and its state
+# the peers of a status, each its unique URI and its state
 states () { printf '%s' "$1" | grep -o '"uri":"[^"]*","role":"[a-z]*","state":"[a-z]*"' | sed 's/"uri":"\([^"]*\)","role":"[a-z]*","state":"\([a-z]*\)"/\1=\2/' | tr '\n' ' ' | sed 's/ $//'; }
 S=host/swarms/swarm-1
 W=$H/work/mrepos/swarm-1
@@ -60,96 +60,96 @@ label=boot; step boot/deploy; is $? 0 "haicc boot/deploy"
 label=host; step --output . boot/deploy host haiccing/base-component-haicc; has "$out" '"service":"started"' "the host deployed and in service"
 
 # 1. a swarm, its master, the lookup db
-out=$(haicc --output host swarm/deploy swarms/swarm-1/node-1); has "$out" "not a swarm made here: swarms/swarm-1 (swarm/create swarms/swarm-1)" "a node below no swarm: refused, saying how one is made"
+out=$(haicc --output host swarm/deploy swarms/swarm-1/peer-1); has "$out" "not a swarm made here: swarms/swarm-1 (swarm/create swarms/swarm-1)" "a peer below no swarm: refused, saying how one is made"
 label=create; step --output host swarm/create swarms/swarm-1 3; is $? 0 "haicc host swarm/create swarms/swarm-1 3: a swarm made, its lease 3 seconds"
 has "$out" '{"created":"swarms/swarm-1","swarm":"swarm-1","master":"swarm-1/master","lease":3000}' "answered: the swarm, its master's unique URI, the lease"
 out=$(haicc --output host crud/read swarms/swarm-1)
 has "$out" '"value":{"kind":"swarm","master":"master","lease":3000,"lookup":{"uri":"swarm-1/master","machine":"' "the swarm's node in the host's main: its kind, its master, where its lookup db is"
 has "$out" "\"folder\":\"$W/master\",\"key\":\"" "the master's folder on this machine, its key"
 has "$out" '"children":["master"]' "its master below it"
-[ -d "$W/master/inbox" ] && [ -d "$W/master/rns/store" ] && [ -f "$W/master/rns/node.json" ] && ok "the master at its place, by its unique URI, its rns' side in its folder: its store, its config" || no "the master at its place, its rns' side in its folder"
+[ -d "$W/master/inbox" ] && [ -d "$W/master/rns/store" ] && [ -f "$W/master/rns/peer.json" ] && ok "the master at its place, by its unique URI, its rns' side in its folder: its store, its config" || no "the master at its place, its rns' side in its folder"
 is "$(running | wc -l | tr -d ' ')" 4 "four processes: the boot mrepo's runtime, the host's, the master's, and the master's rns"
 out=$(haicc --output $S/master rns/status)
 has "$out" '"joined":true,"swarm":"swarm-1","uri":"swarm-1/master","role":"master","master":"swarm-1/master","lease":3000' "haicc host/swarms/swarm-1/master rns/status: the master, of swarm-1"
 is "$(states "$out")" "swarm-1/master=active" "itself registered in the lookup db, active"
 out=$(haicc --output host swarm/create swarms/swarm-1); has "$out" "a swarm already: swarms/swarm-1" "made again: refused"
 
-# 2. nodes deployed into it, each registered by its creator, the host
-label=node-1; step --output host swarm/deploy swarms/swarm-1/node-1; is $? 0 "haicc host swarm/deploy swarms/swarm-1/node-1"
-has "$out" '{"deployed":"swarms/swarm-1/node-1","mrepo":"swarm-1/node-1","package":"haiccing/base-component-node","registered":"swarm-1/master"}' "answered: deployed from the node component, registered at the master"
-label=node-2; step --output host swarm/deploy swarms/swarm-1/node-2; has "$out" '"mrepo":"swarm-1/node-2"' "node-2 too"
-is "$(running | wc -l | tr -d ' ')" 8 "eight processes: each node its runtime and its rns"
-out=$(haicc --output $S/node-1 crud/read .); has "$out" '"uri":["main","."]' "a node in service, answering through the host"
+# 2. peers deployed into it, each registered by its creator, the host
+label=peer-1; step --output host swarm/deploy swarms/swarm-1/peer-1; is $? 0 "haicc host swarm/deploy swarms/swarm-1/peer-1"
+has "$out" '{"deployed":"swarms/swarm-1/peer-1","mrepo":"swarm-1/peer-1","package":"haiccing/base-component-peer","registered":"swarm-1/master"}' "answered: deployed from the peer component, registered at the master"
+label=peer-2; step --output host swarm/deploy swarms/swarm-1/peer-2; has "$out" '"mrepo":"swarm-1/peer-2"' "peer-2 too"
+is "$(running | wc -l | tr -d ' ')" 8 "eight processes: each peer its runtime and its rns"
+out=$(haicc --output $S/peer-1 crud/read .); has "$out" '"uri":["main","."]' "a peer in service, answering through the host"
 out=$(haicc --output "$S/master" crud/read "done/*[value/value/action='register']" --flags layer=request)
-has "$out" '\"by\":\"local/host\"' "the master's request log: each node registered by the host, its creator"
+has "$out" '\"by\":\"local/host\"' "the master's request log: each peer registered by the host, its creator"
 
-# 3. who is registered and active: asked of a node, the master, the host
-until_has 10 '"uri":"swarm-1/node-2","role":"node","state":"active"' --output $S/node-1 rns/status
-is "$(states "$out")" "swarm-1/master=active swarm-1/node-1=active swarm-1/node-2=active" "haicc host/swarms/swarm-1/node-1 rns/status: the master and both nodes, active, from its own replica of the lookup db"
-has "$out" '"role":"node","master":"swarm-1/master"' "the node's own place in it: a node, its master"
+# 3. who is registered and active: asked of a peer, the master, the host
+until_has 10 '"uri":"swarm-1/peer-2","role":"peer","state":"active"' --output $S/peer-1 rns/status
+is "$(states "$out")" "swarm-1/master=active swarm-1/peer-1=active swarm-1/peer-2=active" "haicc host/swarms/swarm-1/peer-1 rns/status: the master and both peers, active, from its own replica of the lookup db"
+has "$out" '"role":"peer","master":"swarm-1/master"' "the peer's own place in it: a peer, its master"
 has "$out" '"synced":"20' "when its replica was brought up to date"
-is "$(states "$(haicc --output $S/node-2 rns)")" "swarm-1/master=active swarm-1/node-1=active swarm-1/node-2=active" "the other node, the same (rns alone is rns/status)"
-is "$(states "$(haicc --output $S/master rns/status)")" "swarm-1/master=active swarm-1/node-1=active swarm-1/node-2=active" "the master, the same"
-is "$(states "$(haicc --output host swarm/status swarms/swarm-1)")" "swarm-1/master=active swarm-1/node-1=active swarm-1/node-2=active" "haicc host swarm/status swarms/swarm-1: asked of the host, answered by the master"
-out=$(haicc --output $S/node-1 rns/resolve . swarm-1/node-2)
-has "$out" "{\"uri\":\"swarm-1/node-2\",\"role\":\"node\",\"state\":\"active\"" "haicc host/swarms/swarm-1/node-1 rns/resolve . swarm-1/node-2: resolved at a node"
-has "$out" "\"folder\":\"$W/node-2\"}" "where it lives: its machine, its folder there"
-out=$(haicc --output $S/node-1 rns/resolve . swarm-1/node-9); has "$out" "not registered: swarm-1/node-9 (swarm-1/master, swarm-1/node-1, swarm-1/node-2)" "one that is not registered: said, with those that are"
-out=$(haicc --output $S/node-1 rns/register . '{"uri":"swarm-1/x","key":"'$(printf 'ab%.0s' 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32)'","machine":"m","folder":"/x"}'); has "$out" "not the master: rns register is asked of the swarm's master (swarm-1/master)" "registering asked of a node: refused, the master named"
+is "$(states "$(haicc --output $S/peer-2 rns)")" "swarm-1/master=active swarm-1/peer-1=active swarm-1/peer-2=active" "the other peer, the same (rns alone is rns/status)"
+is "$(states "$(haicc --output $S/master rns/status)")" "swarm-1/master=active swarm-1/peer-1=active swarm-1/peer-2=active" "the master, the same"
+is "$(states "$(haicc --output host swarm/status swarms/swarm-1)")" "swarm-1/master=active swarm-1/peer-1=active swarm-1/peer-2=active" "haicc host swarm/status swarms/swarm-1: asked of the host, answered by the master"
+out=$(haicc --output $S/peer-1 rns/resolve . swarm-1/peer-2)
+has "$out" "{\"uri\":\"swarm-1/peer-2\",\"role\":\"peer\",\"state\":\"active\"" "haicc host/swarms/swarm-1/peer-1 rns/resolve . swarm-1/peer-2: resolved at a peer"
+has "$out" "\"folder\":\"$W/peer-2\"}" "where it lives: its machine, its folder there"
+out=$(haicc --output $S/peer-1 rns/resolve . swarm-1/peer-9); has "$out" "not registered: swarm-1/peer-9 (swarm-1/master, swarm-1/peer-1, swarm-1/peer-2)" "one that is not registered: said, with those that are"
+out=$(haicc --output $S/peer-1 rns/register . '{"uri":"swarm-1/x","key":"'$(printf 'ab%.0s' 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32)'","machine":"m","folder":"/x"}'); has "$out" "not the master: rns register is asked of the swarm's master (swarm-1/master)" "registering asked of a peer: refused, the master named"
 
-# 3b. the logs: a node's log is its request log, as every mrepo's: read
+# 3b. the logs: a peer's log is its request log, as every mrepo's: read
 # where it is, a topic, the latest first; nothing copied or collected
-out=$(haicc --output $S/node-1 crud/create notes/a); has "$out" '"outcome":"created"' "a command at node-1: something in its log"
-haicc --output $S/node-2 crud/create notes/b >/dev/null
-out=$(haicc --output $S/node-1 crud/read "done/*[value/value/protocol='crud']" --flags layer=request)
-has "$out" '"uri":["request","done/*[@offset=' "haicc host/swarms/swarm-1/node-1 crud/read \"done/*[...]\" --flags layer=request: its request log, each record by its address"
+out=$(haicc --output $S/peer-1 crud/create notes/a); has "$out" '"outcome":"created"' "a command at peer-1: something in its log"
+haicc --output $S/peer-2 crud/create notes/b >/dev/null
+out=$(haicc --output $S/peer-1 crud/read "done/*[value/value/protocol='crud']" --flags layer=request)
+has "$out" '"uri":["request","done/*[@offset=' "haicc host/swarms/swarm-1/peer-1 crud/read \"done/*[...]\" --flags layer=request: its request log, each record by its address"
 has "$out" '"protocol":"crud","action":"create","uri":["main","notes/a"]' "its record: the command"
 has "$out" '"outcome":"created"' "and how it ended: its output with it"
-hasnt "$out" 'notes/b' "no other node's records"
-[ ! -e "$W/node-1/log" ] && ok "no log of its own beside it: nothing copied" || no "no log of its own beside it: nothing copied"
-out=$(haicc --output $S/node-1 log/read); has "$out" "haicc:" "no log protocol: refused"
+hasnt "$out" 'notes/b' "no other peer's records"
+[ ! -e "$W/peer-1/log" ] && ok "no log of its own beside it: nothing copied" || no "no log of its own beside it: nothing copied"
+out=$(haicc --output $S/peer-1 log/read); has "$out" "haicc:" "no log protocol: refused"
 
-# 3c. dispatch: a command from one node to another by its unique URI,
+# 3c. dispatch: a command from one peer to another by its unique URI,
 # resolved by rns, delivered into its inbox folder; the master not on the path
-out=$(haicc --output $S/node-1 haicc swarm-1/node-2 crud/create notes/sent '{"from":"node-1"}')
-has "$out" '{"uri":["main","notes/sent"],"value":{"from":"node-1"},"children":[],"outcome":"created"}' "haicc host/swarms/swarm-1/node-1 haicc swarm-1/node-2 crud/create notes/sent: answered by node-2"
-is "$(haicc --output $S/node-2 crud/read notes/sent)" '[{"uri":["main","notes/sent"],"value":{"from":"node-1"},"children":[]}]' "in node-2's main"
-is "$(haicc --output $S/node-1 crud/read notes/sent)" '[]' "not in node-1's"
-is "$(haicc --output $S/node-1 dispatch/send swarm-1/node-2 crud/read notes/sent)" '[{"uri":["main","notes/sent"],"value":{"from":"node-1"},"children":[]}]' "the same asked of dispatch by name: haicc ... dispatch/send swarm-1/node-2 crud/read notes/sent"
-is "$(haicc --output $S/node-1 haicc swarm-1/node-2/notes crud/read sent)" '[{"uri":["main","notes","sent"],"value":{"from":"node-1"},"children":[]}]' "a position below the node: what follows its unique URI goes on with the command"
-out=$(haicc --raw $S/node-1 --flags log=verbose -- haicc swarm-1/node-2 crud/read notes/sent)
-has "$out" '"event":"dispatch.send.resolved"' "its path, in the request's log (log=verbose at node-1's step): resolved by node-1's rns"
-has "$out" '"to":"swarm-1/node-2","how":"folder"' "dispatched by the folder drop"
-has "$out" '"jump":["host","swarms/swarm-1/node-1","swarm-1/node-2"]' "the entries of what node-2 did, under the jumps: the host, node-1, then node-2 by its unique URI"
+out=$(haicc --output $S/peer-1 haicc swarm-1/peer-2 crud/create notes/sent '{"from":"peer-1"}')
+has "$out" '{"uri":["main","notes/sent"],"value":{"from":"peer-1"},"children":[],"outcome":"created"}' "haicc host/swarms/swarm-1/peer-1 haicc swarm-1/peer-2 crud/create notes/sent: answered by peer-2"
+is "$(haicc --output $S/peer-2 crud/read notes/sent)" '[{"uri":["main","notes/sent"],"value":{"from":"peer-1"},"children":[]}]' "in peer-2's main"
+is "$(haicc --output $S/peer-1 crud/read notes/sent)" '[]' "not in peer-1's"
+is "$(haicc --output $S/peer-1 dispatch/send swarm-1/peer-2 crud/read notes/sent)" '[{"uri":["main","notes/sent"],"value":{"from":"peer-1"},"children":[]}]' "the same asked of dispatch by name: haicc ... dispatch/send swarm-1/peer-2 crud/read notes/sent"
+is "$(haicc --output $S/peer-1 haicc swarm-1/peer-2/notes crud/read sent)" '[{"uri":["main","notes","sent"],"value":{"from":"peer-1"},"children":[]}]' "a position below the peer: what follows its unique URI goes on with the command"
+out=$(haicc --raw $S/peer-1 --flags log=verbose -- haicc swarm-1/peer-2 crud/read notes/sent)
+has "$out" '"event":"dispatch.send.resolved"' "its path, in the request's log (log=verbose at peer-1's step): resolved by peer-1's rns"
+has "$out" '"to":"swarm-1/peer-2","how":"folder"' "dispatched by the folder drop"
+has "$out" '"jump":["host","swarms/swarm-1/peer-1","swarm-1/peer-2"]' "the entries of what peer-2 did, under the jumps: the host, peer-1, then peer-2 by its unique URI"
 hasnt "$out" '"mrepo":"swarm-1/master"' "the master not on the path"
-out=$(haicc --output $S/node-2 haicc swarm-1/master rns/status); is "$(states "$out")" "swarm-1/master=active swarm-1/node-1=active swarm-1/node-2=active" "the master a node as any other: haicc ... node-2 haicc swarm-1/master rns/status"
-out=$(haicc --output $S/node-1 haicc swarm-1/node-1 crud/read notes/a); has "$out" '"uri":["main","notes/a"]' "a node's own unique URI: executed there"
-out=$(haicc --output $S/node-1 haicc swarm-1/node-9 crud/read .); has "$out" "haicc swarm-1/node-9: no node there, and no node of the swarm by that unique URI" "a unique URI no node has: said"
-out=$(haicc --output host haicc swarm-1/node-2 crud/read .); has "$out" "haicc swarm-1/node-2: no node there" "at the host, which does not dispatch: a position that is not there"
-out=$(haicc --output $S/node-2 crud/read "done/*[value/value/action='create']" --flags layer=request)
-has "$out" '"uri":["main","notes/sent"]' "node-2's request log: the dispatched command"
-has "$out" '"topic":"/swarm-1/node-1/execute/' "asked by node-1"
+out=$(haicc --output $S/peer-2 haicc swarm-1/master rns/status); is "$(states "$out")" "swarm-1/master=active swarm-1/peer-1=active swarm-1/peer-2=active" "the master a peer as any other: haicc ... peer-2 haicc swarm-1/master rns/status"
+out=$(haicc --output $S/peer-1 haicc swarm-1/peer-1 crud/read notes/a); has "$out" '"uri":["main","notes/a"]' "a peer's own unique URI: executed there"
+out=$(haicc --output $S/peer-1 haicc swarm-1/peer-9 crud/read .); has "$out" "haicc swarm-1/peer-9: no node there, and no peer of the swarm by that unique URI" "a unique URI no peer has: said"
+out=$(haicc --output host haicc swarm-1/peer-2 crud/read .); has "$out" "haicc swarm-1/peer-2: no node there" "at the host, which does not dispatch: a position that is not there"
+out=$(haicc --output $S/peer-2 crud/read "done/*[value/value/action='create']" --flags layer=request)
+has "$out" '"uri":["main","notes/sent"]' "peer-2's request log: the dispatched command"
+has "$out" '"topic":"/swarm-1/peer-1/execute/' "asked by peer-1"
 
-# 4. a node gone quiet: its service stopped, its rns ended, its lease run out
-label=stop; step --output $S/node-2 service/stop; has "$out" '"state":"initialised"' "node-2's service stopped"
+# 4. a peer gone quiet: its service stopped, its rns ended, its lease run out
+label=stop; step --output $S/peer-2 service/stop; has "$out" '"state":"initialised"' "peer-2's service stopped"
 is "$(running | wc -l | tr -d ' ')" 7 "its rns ended with it: seven processes"
-out=$(haicc --output $S/node-2 rns/status); has "$out" "not now: rns status (rns is not active; the service is initialised)" "its rns behind its service's door"
-label=quiet; s=$(ms); until_has 15 '"uri":"swarm-1/node-2","role":"node","state":"quiet"' --output $S/master rns/status; echo "quiet $(( $(ms) - s ))" >> "$TIMES"
-is "$(states "$out")" "swarm-1/master=active swarm-1/node-1=active swarm-1/node-2=quiet" "the master: node-2 gone quiet once its lease ran out, node-1 active still"
-until_has 10 '"uri":"swarm-1/node-2","role":"node","state":"quiet"' --output $S/node-1 rns/status
-is "$(states "$out")" "swarm-1/master=active swarm-1/node-1=active swarm-1/node-2=quiet" "node-1: seen quiet there too, at its next turn"
-label=start; step --output $S/node-2 service/start; has "$out" '"state":"started"' "node-2 started again"
-until_has 10 '"uri":"swarm-1/node-2","role":"node","state":"active"' --output $S/node-1 rns/status
-is "$(states "$out")" "swarm-1/master=active swarm-1/node-1=active swarm-1/node-2=active" "active again, seen at node-1"
+out=$(haicc --output $S/peer-2 rns/status); has "$out" "not now: rns status (rns is not active; the service is initialised)" "its rns behind its service's door"
+label=quiet; s=$(ms); until_has 15 '"uri":"swarm-1/peer-2","role":"peer","state":"quiet"' --output $S/master rns/status; echo "quiet $(( $(ms) - s ))" >> "$TIMES"
+is "$(states "$out")" "swarm-1/master=active swarm-1/peer-1=active swarm-1/peer-2=quiet" "the master: peer-2 gone quiet once its lease ran out, peer-1 active still"
+until_has 10 '"uri":"swarm-1/peer-2","role":"peer","state":"quiet"' --output $S/peer-1 rns/status
+is "$(states "$out")" "swarm-1/master=active swarm-1/peer-1=active swarm-1/peer-2=quiet" "peer-1: seen quiet there too, at its next turn"
+label=start; step --output $S/peer-2 service/start; has "$out" '"state":"started"' "peer-2 started again"
+until_has 10 '"uri":"swarm-1/peer-2","role":"peer","state":"active"' --output $S/peer-1 rns/status
+is "$(states "$out")" "swarm-1/master=active swarm-1/peer-1=active swarm-1/peer-2=active" "active again, seen at peer-1"
 
-# 5. a node taken out
+# 5. a peer taken out
 out=$(haicc --output host swarm/leave swarms/swarm-1/master); has "$out" "is the swarm's master: it does not leave" "the master does not leave"
-label=leave; step --output host swarm/leave swarms/swarm-1/node-2; has "$out" '{"left":"swarms/swarm-1/node-2","mrepo":"swarm-1/node-2"}' "haicc host swarm/leave swarms/swarm-1/node-2"
-[ ! -e "$W/node-2" ] && ok "its folder removed" || no "its folder removed"
-is "$(states "$(haicc --output $S/master rns/status)")" "swarm-1/master=active swarm-1/node-1=active" "out of the lookup db"
-until_has 10 '"registry":{"key":"' --output $S/node-1 rns/status
-i=0; while [ "$(states "$out")" != "swarm-1/master=active swarm-1/node-1=active" ] && [ "$i" -lt 20 ]; do sleep 0.5 2>/dev/null || sleep 1; out=$(haicc --output $S/node-1 rns/status); i=$((i + 1)); done
-is "$(states "$out")" "swarm-1/master=active swarm-1/node-1=active" "and out of node-1's replica, at its next turn"
+label=leave; step --output host swarm/leave swarms/swarm-1/peer-2; has "$out" '{"left":"swarms/swarm-1/peer-2","mrepo":"swarm-1/peer-2"}' "haicc host swarm/leave swarms/swarm-1/peer-2"
+[ ! -e "$W/peer-2" ] && ok "its folder removed" || no "its folder removed"
+is "$(states "$(haicc --output $S/master rns/status)")" "swarm-1/master=active swarm-1/peer-1=active" "out of the lookup db"
+until_has 10 '"registry":{"key":"' --output $S/peer-1 rns/status
+i=0; while [ "$(states "$out")" != "swarm-1/master=active swarm-1/peer-1=active" ] && [ "$i" -lt 20 ]; do sleep 0.5 2>/dev/null || sleep 1; out=$(haicc --output $S/peer-1 rns/status); i=$((i + 1)); done
+is "$(states "$out")" "swarm-1/master=active swarm-1/peer-1=active" "and out of peer-1's replica, at its next turn"
 is "$(running | wc -l | tr -d ' ')" 6 "six processes left"
 
 # 6. the log viewer: a Splectral component, any mrepo's request log in a browser
@@ -167,11 +167,11 @@ get /log/; is "$code" 200 "its page: $URL/log/"
 has "$PAGE" '<td class="cmd">boot/deploy splectral haiccing/base-package-splectral</td>' "the root's request log: a request made at it"
 has "$PAGE" '<option value="./?at=host">host (local/host)</option>' "its drop-down: the install's mrepos, each by its position"
 has "$PAGE" '<footer>haicc . crud/read &quot;done/*&quot; --flags layer=request</footer>' "the command it is, below (its quotes escaped in the page)"
-get "/log/?at=host/swarms/swarm-1/node-1"; is "$code" 200 "another mrepo: /log/?at=host/swarms/swarm-1/node-1"
-has "$PAGE" '<td class="cmd">crud/create notes/a</td>' "that node's requests"
+get "/log/?at=host/swarms/swarm-1/peer-1"; is "$code" 200 "another mrepo: /log/?at=host/swarms/swarm-1/peer-1"
+has "$PAGE" '<td class="cmd">crud/create notes/a</td>' "that peer's requests"
 has "$PAGE" '<td class="cmd">service/start' "every one of them"
 hasnt "$PAGE" 'notes/b' "and no other's"
-get "/log/?at=host/swarms/swarm-1/node-1&filter=%5Bvalue/value/action=%27create%27%5D"; is "$code" 200 "filtered: /log/?at=...&filter=[value/value/action='create']"
+get "/log/?at=host/swarms/swarm-1/peer-1&filter=%5Bvalue/value/action=%27create%27%5D"; is "$code" 200 "filtered: /log/?at=...&filter=[value/value/action='create']"
 has "$PAGE" '<td class="cmd">crud/create notes/a</td>' "the records the filter holds for"
 hasnt "$PAGE" '<td class="cmd">service/start' "and no others"
 get "/log/?at=host/swarms/swarm-9/master"; has "$PAGE" '<p class="error">' "an mrepo that is not there: said on the page"
@@ -184,7 +184,7 @@ if [ "$keep" != yes ]; then
 fi
 
 echo "# timing (ms)"
-for s in boot host create node-1 node-2 stop quiet start leave splectral viewer machine; do echo "# $s $(sed -n "s/^$s //p" "$TIMES")"; done
+for s in boot host create peer-1 peer-2 stop quiet start leave splectral viewer machine; do echo "# $s $(sed -n "s/^$s //p" "$TIMES")"; done
 echo "# pages $(sed -n 's/^page //p' "$TIMES" | tr '\n' ' ')"
 echo "# checks = $((n - failed))/$n pass"
 [ "$failed" -eq 0 ] && { echo "# ok"; exit 0; }

@@ -2,7 +2,7 @@
 # haicc-install.sh: installs the haicc command on this machine. Generated
 # (haiccing/base-linux-haicc: build.sh); not edited.
 #   sh haicc-install.sh [--home=<folder>] [--bin=<folder>]
-#     --home   haicc's own folder: its scripts, its pins, its sources list,
+#     --home   haicc's own folder: its scripts, its pins, its sources lists,
 #              later its sources, Bare and the work folder
 #              ($HAICC_HOME, else ~/.haicc)
 #     --bin    where the command is registered, a folder on the PATH
@@ -107,24 +107,30 @@ exec "$HAICC_BARE" "$bundle" /run "$@"
 HAICC_INSTALL_FILE_END
 cat > "$home/bin/haicc-lib.sh" <<'HAICC_INSTALL_FILE_END'
 # haicc-lib.sh: what the haicc scripts share; sourced, never run.
-#   HAICC_HOME   haicc's own folder: bin/, pins, sources.list, sources/, bare/
+#   HAICC_HOME   haicc's own folder: bin/, pins, sources.list, external.list,
+#                sources/, bare/
 # The pins (the pinned Bare, a build a platform, the organisation, the
 # app) come from $HAICC_HOME/pins; this machine's Bare chosen from them.
 HAICC_HOME=${HAICC_HOME:-$(cd "$(dirname "$0")/.." && pwd)}
 . "$HAICC_HOME/pins"
+# The lists, a line a source: the internal, the install's folders, what the
+# platform reads (folder:<path>); the external (github:<org>), a record of
+# where each download came from, never read inside.
 HAICC_LIST=$HAICC_HOME/sources.list
+HAICC_EXTERNAL=$HAICC_HOME/external.list
 HAICC_BARE=$HAICC_HOME/bare/bin/bare
 
 fail () { printf 'haicc: %s\n' "$1" >&2; exit "${2:-1}"; }
 
-# The sources registered, one a line: the folders first, in the order they
-# were linked (folder:<path>), then https, the backup (github:<org>).
+# The internal list's folders, one a line, in the order linked
+# (folder:<path>); a line of another kind in it is not read.
 sources () {
   [ -f "$HAICC_LIST" ] || return 0
   grep '^folder:' "$HAICC_LIST" || true
-  grep -v '^folder:' "$HAICC_LIST" || true
 }
-# The folders among them, in order.
+# The external list, one a line.
+external () { [ -f "$HAICC_EXTERNAL" ] && cat "$HAICC_EXTERNAL" || true; }
+# The folders, in order.
 folders () { sources | sed -n 's/^folder://p'; }
 # A file (relative to a source) in the first folder that holds it: its path.
 in_sources () {
@@ -186,7 +192,7 @@ done
 # sources
 app=$(in_sources "$HAICC_ORG/$APP_PACKAGE.bundle")
 if [ -n "$app" ] && [ -f "$(dirname "$app")/manifest.json" ]; then ok "sources: $(dirname "$(dirname "$app")")"
-else miss "sources: no folder registered holds $HAICC_ORG/$APP_PACKAGE.bundle (haicc sources link <folder>)"; fi
+else miss "sources: no folder registered holds $HAICC_ORG/$APP_PACKAGE.bundle: the platform reads local folders only (haicc sources download $HAICC_ORG, or haicc sources link <folder>)"; fi
 
 # bare
 if [ -z "$BARE_FILE" ]; then
@@ -218,7 +224,7 @@ cat > "$home/bin/haicc-sources" <<'HAICC_INSTALL_FILE_END'
 #!/bin/sh
 # haicc sources, the part that has to work before Bare is on the machine:
 # where Bare's runtime and the app come from. The other actions (the list,
-# unlink, https, no-https) are the app's.
+# unlink) are the app's.
 #   haicc sources link <folder>       a local folder linked as a source (not
 #                                     copied): our packages (<org>/<package>
 #                                     .bundle, <org>/manifest.json, addons/)
@@ -238,18 +244,26 @@ cat > "$home/bin/haicc-sources" <<'HAICC_INSTALL_FILE_END'
 #                                     from its own release (r-<commit>),
 #                                     each checked against the manifest
 #                                     (sha256); the manifest written last;
-#                                     github:<org> registered
-# The list is the app's too: $HAICC_HOME/sources.list, a line a source,
-# folder:<path> or github:<org>. This is the only script that reaches the
-# network.
+#                                     github:<org> registered, in the
+#                                     external list
+# The lists are the app's too, a line a source: the internal,
+# $HAICC_HOME/sources.list, the install's folders (folder:<path>); the
+# external, $HAICC_HOME/external.list (github:<org>), a record of where
+# each download came from; nothing reads it to act on it yet. The download is the boundary process for the sources:
+# what it fetches is checked here, then trusted inside.
 set -u
 . "$(dirname "$0")/haicc-lib.sh"
 own=$HAICC_HOME/sources
 
+# A line registered once, in its list: a folder the internal, any other
+# kind the external.
 register () {
-  sources | grep -Fxq "$1" && return 0
-  printf '%s\n' "$1" >> "$HAICC_LIST"
+  case "$1" in folder:*) _l=$HAICC_LIST ;; *) _l=$HAICC_EXTERNAL ;; esac
+  [ -f "$_l" ] && grep -Fxq "$1" "$_l" && return 0
+  printf '%s\n' "$1" >> "$_l"
 }
+# The lists, as haicc sources prints them: the folders, then the external.
+shown () { sources; external; }
 
 # A file fetched over https: tried up to five times, each try going on from
 # what the one before got (-C -), since a connection reset in the middle of
@@ -349,12 +363,13 @@ case "$cmd" in
     [ $# -eq 1 ] || fail "haicc sources link <folder>" 2
     [ -d "$1" ] || fail "no folder: $1" 2
     register "folder:$(cd "$1" && pwd)"
-    sources ;;
+    shown ;;
   download)
     [ $# -gt 0 ] || fail "haicc sources download bare|<org>..." 2
     for what in "$@"; do is_download "$what" || fail "haicc sources download bare|<org>... (not one: $what)" 2; done
     # the folder registered after each download, so what one fetched is
-    # there even when the next fails; an organisation's https too
+    # there even when the next fails; an organisation's source, in the
+    # external list
     for what in "$@"; do
       case "$what" in
         bare|third-party) download_bare ;;
@@ -387,8 +402,6 @@ APP_PACKAGE=base-app-haicc
 HAICC_INSTALL_FILE_END
 chmod +x "$home/bin/haicc"
 . "$home/pins"
-# https the backup, by default (haicc sources no-https: not)
-[ -f "$home/sources.list" ] || printf 'github:%s\n' "$HAICC_ORG" > "$home/sources.list"
 # The command, registered: a small script on the PATH that names haicc's folder.
 q () { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 printf '#!/bin/sh\nHAICC_HOME=%s exec sh %s "$@"\n' "$(q "$home")" "$(q "$home/bin/haicc")" > "$bin/haicc"

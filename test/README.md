@@ -27,7 +27,7 @@ inspect. One line a check, the count last; exit 0 passed, 1 failed.
    From here the command is the app: its usage whole; no such command; a
    URI with no command after it; `haicc boot` alone; `--output` without a
    URI; no boot mrepo yet (a teardown then a repeat, a warning); the backup off and on; a folder linked twice
-   listed once; a download of our packages, not published yet.
+   listed once; a download of our packages.
 6. **The boot**: `haicc boot/deploy`: the boot mrepo at the root, its
    runtime started, nothing deployed.
 7. **Commands**: the host deployed at the root from
@@ -81,11 +81,21 @@ inspect. One line a check, the count last; exit 0 passed, 1 failed.
 brought to the request so far (`base-docs-hdlc`, "Schema migration");
 `run.sh` is the whole, for after the migration.
 
-1. **Installed**, the sources linked, Bare put in place; an mrepo
-   command before the boot says what is missing.
-2. **The boot**, `haicc boot/deploy`: a program, a line a step (the
-   boot mrepo built, its packages placed, its runtime started), its
-   outcome the last line.
+1. **Installed**: the installer current (as `build.sh` writes it); no
+   source registered by it; the sources linked, Bare put in place; a
+   `github:` line written into `sources.list`, as an install made
+   before has it: said not read. **The download** into a home of its
+   own, from a copy of the releases' layout made from the sources
+   (`HAICC_RELEASES`, `file://`): every bundle as the manifest says, the
+   manifest written, `github:haiccing` in the external list only, the
+   internal list the folder it filled only; a bundle not as its
+   manifest says refused, not kept. An mrepo command before the
+   boot says what is missing.
+2. **The boot**, `haicc boot/deploy`, the `github:` line in
+   `sources.list`: booted, so handed folders only (the boot refuses a
+   `github:` source); a program, a line a step (the boot mrepo built,
+   its packages placed, its runtime started), its outcome the last
+   line.
 3. **A command for the mrepos**: what it says printed
    (`haicc/mrepos`: the boot mrepo and the schema registry, the fixture
    its boot hook deployed, before anything was taken in): its types by
@@ -108,23 +118,23 @@ brought to the request so far (`base-docs-hdlc`, "Schema migration");
 `sh test/swarm.sh` (`--keep` as above) tries a swarm on one host, end to
 end, in a temporary folder removed after: a host in service; a swarm
 made with a lease of three seconds, its master and its lookup db; two
-nodes deployed into it, each registered by the host; who is registered
-and active asked of the host, the master and each node; a node
-resolved; a node gone quiet once its service stopped and its lease ran
-out, seen at the master and at the other node, active again when
-started; each node's requests in its own request log, read where it
+peers deployed into it, each registered by the host; who is registered
+and active asked of the host, the master and each peer; a peer
+resolved; a peer gone quiet once its service stopped and its lease ran
+out, seen at the master and at the other peer, active again when
+started; each peer's requests in its own request log, read where it
 is; a command dispatched from
-one node to another by its unique URI, its path in the request's log,
-the master not on it; what is refused; a node
+one peer to another by its unique URI, its path in the request's log,
+the master not on it; what is refused; a peer
 taken out; the log viewer installed on Splectral, its page asked over
-HTTP, the root's request log, a node's, filtered; nothing left running. What
-a lease or a node's next turn brings about is asked again until it is
+HTTP, the root's request log, a peer's, filtered; nothing left running. What
+a lease or a peer's next turn brings about is asked again until it is
 there, for some seconds. Each step timed.
 
 ## In a container
 
 `sh test/container.sh`: the haicc command installed in a container as on
-a machine, from the host's sources, the prerequisite of a node run in its
+a machine, from the host's sources, the prerequisite of a peer run in its
 container. A plain `debian:bookworm-slim` container with nothing of haicc
 in its image; Docker answering (else skipped), the image there (pulled
 once; offline, put there beforehand). The container removed after, its

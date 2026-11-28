@@ -17,7 +17,7 @@ done
 # haicc-install.sh: installs the haicc command on this machine. Generated
 # (haiccing/base-linux-haicc: build.sh); not edited.
 #   sh haicc-install.sh [--home=<folder>] [--bin=<folder>]
-#     --home   haicc's own folder: its scripts, its pins, its sources list,
+#     --home   haicc's own folder: its scripts, its pins, its sources lists,
 #              later its sources, Bare and the work folder
 #              ($HAICC_HOME, else ~/.haicc)
 #     --bin    where the command is registered, a folder on the PATH
@@ -58,8 +58,6 @@ HEAD
   cat <<'TAIL'
 chmod +x "$home/bin/haicc"
 . "$home/pins"
-# https the backup, by default (haicc sources no-https: not)
-[ -f "$home/sources.list" ] || printf 'github:%s\n' "$HAICC_ORG" > "$home/sources.list"
 # The command, registered: a small script on the PATH that names haicc's folder.
 q () { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 printf '#!/bin/sh\nHAICC_HOME=%s exec sh %s "$@"\n' "$(q "$home")" "$(q "$home/bin/haicc")" > "$bin/haicc"

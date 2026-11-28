@@ -5,6 +5,6 @@
   "license": "MIT",
   "scripts": {
     "build": "sh build.sh",
-    "test": "sh test/run.sh"
+    "test": "sh test/core.sh"
   }
 }

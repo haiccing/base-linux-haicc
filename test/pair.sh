@@ -1,7 +1,7 @@
 #!/bin/sh
 # The pair deploy tested against everything on the host: one scenario, a
-# host with a swarm's node that deploys an mrepo of its own, run twice:
-# the node deployed on the host, and the node deployed into a container
+# host with a swarm's peer that deploys an mrepo of its own, run twice:
+# the peer deployed on the host, and the peer deployed into a container
 # on the container's own haicc install (--flags container), the host
 # forwarding to it. The same commands and checks in both; the pair's own
 # checks besides; each step timed, the two side by side at the end.
@@ -44,7 +44,7 @@ cleanup () {
 }
 trap cleanup EXIT
 
-# The scenario, in one mode: host (the node on the host) or pair (the node
+# The scenario, in one mode: host (the peer on the host) or pair (the peer
 # in a container). Each step timed into TIMES: <mode> <step> <ms>.
 scenario () {
   mode=$1
@@ -55,37 +55,37 @@ scenario () {
   haicc () { PATH=$T/bin:$PATH HAICC_HOME=$H HAICC_TIMEOUT=240 "$T/bin/haicc" "$@" 2>&1; }
   step () { s=$(ms); out=$(haicc "$@"); r=$?; echo "$mode $label $(( $(ms) - s ))" >> "$TIMES"; return $r; }
   flag=""; [ "$mode" = pair ] && flag="--flags container"
-  N=host/swarms/swarm-1/node-1
+  N=host/swarms/swarm-1/peer-1
   echo "# $mode"
   haicc sources link "$SOURCES" >/dev/null; haicc prereq >/dev/null
   label=boot; step boot/deploy; is $? 0 "$mode: haicc boot/deploy"
   label=host; step --output . boot/deploy host haiccing/base-component-haicc; is $? 0 "$mode: the host deployed and started, by its commission"
   label=swarm; step --output host crud/create swarms/swarm-1 '{"kind":"swarm"}'; is $? 0 "$mode: a swarm at the host"
   # shellcheck disable=SC2086
-  label=deploy; step --output host boot/deploy swarms/swarm-1/node-1 haiccing/base-component-haicc $flag; is $? 0 "$mode: the node deployed${flag:+ ($flag)}"
-  has "$out" '"mrepo":"swarm-1/node-1"' "$mode: by its unique URI"
+  label=deploy; step --output host boot/deploy swarms/swarm-1/peer-1 haiccing/base-component-haicc $flag; is $? 0 "$mode: the peer deployed${flag:+ ($flag)}"
+  has "$out" '"mrepo":"swarm-1/peer-1"' "$mode: by its unique URI"
   if [ "$mode" = pair ]; then
-    has "$out" '"container":{"name":"haicc-pair-swarm-1-node-1-' "pair: in its container"
-    is "$(docker ps -q --filter "label=haicc.folder=$H/work/containers/swarm-1/node-1" | wc -l | tr -d ' ')" 1 "pair: the container running, labelled with the pair's folder"
-    is "$(ls "$H/work/mrepos/swarm-1" 2>/dev/null)" "" "pair: nothing of the node in the host's mrepos"
+    has "$out" '"container":{"name":"haicc-pair-swarm-1-peer-1-' "pair: in its container"
+    is "$(docker ps -q --filter "label=haicc.folder=$H/work/containers/swarm-1/peer-1" | wc -l | tr -d ' ')" 1 "pair: the container running, labelled with the pair's folder"
+    is "$(ls "$H/work/mrepos/swarm-1" 2>/dev/null)" "" "pair: nothing of the peer in the host's mrepos"
   fi
-  label=initialise; step --output $N service/initialise; has "$out" '"state":"started","again":true' "$mode: the node in service by its commission, at its deploy (a pair's: in its container); initialise again: a repeat"
-  label=create; step --output $N crud/create notes/a '{"x":1}'; has "$out" '"outcome":"created"' "$mode: a node made in the node's main"
+  label=initialise; step --output $N service/initialise; has "$out" '"state":"started","again":true' "$mode: the peer in service by its commission, at its deploy (a pair's: in its container); initialise again: a repeat"
+  label=create; step --output $N crud/create notes/a '{"x":1}'; has "$out" '"outcome":"created"' "$mode: a node made in the peer's main"
   label=read; step --output $N crud/read notes/a; has "$out" '"value":{"x":1}' "$mode: read back"
   label=script; step --output $N haicc/script . 'crud/create notes/b
-crud/read notes/b'; has "$out" '"line":"crud/read notes/b"' "$mode: a script's lines at the node"
-  label=sub; step --output $N boot/deploy sub haiccing/base-component-haicc; has "$out" '"deployed":"sub"' "$mode: the node deploys an mrepo of its own"
-  label=sub-start; step --output $N/sub service/start; has "$out" '"state":"started","again":true' "$mode: in service by its commission, through the node (a start again: a repeat)"
-  label=sub-read; step --output $N/sub crud/read .; has "$out" '"uri":["main","."]' "$mode: reached through the node"
+crud/read notes/b'; has "$out" '"line":"crud/read notes/b"' "$mode: a script's lines at the peer"
+  label=sub; step --output $N boot/deploy sub haiccing/base-component-haicc; has "$out" '"deployed":"sub"' "$mode: the peer deploys an mrepo of its own"
+  label=sub-start; step --output $N/sub service/start; has "$out" '"state":"started","again":true' "$mode: in service by its commission, through the peer (a start again: a repeat)"
+  label=sub-read; step --output $N/sub crud/read .; has "$out" '"uri":["main","."]' "$mode: reached through the peer"
   if [ "$mode" = pair ]; then
-    is "$(ls "$H/work/mrepos/swarm-1" 2>/dev/null)" "" "pair: the node's mrepo is the container's: nothing of it in the host's mrepos"
+    is "$(ls "$H/work/mrepos/swarm-1" 2>/dev/null)" "" "pair: the peer's mrepo is the container's: nothing of it in the host's mrepos"
   fi
-  label=teardown; step --output host boot/teardown swarms/swarm-1/node-1; has "$out" '"tornDown":"swarms/swarm-1/node-1"' "$mode: the node torn down"
+  label=teardown; step --output host boot/teardown swarms/swarm-1/peer-1; has "$out" '"tornDown":"swarms/swarm-1/peer-1"' "$mode: the peer torn down"
   if [ "$mode" = pair ]; then
-    is "$(docker ps -aq --filter "label=haicc.folder=$H/work/containers/swarm-1/node-1" | wc -l | tr -d ' ')" 0 "pair: its container removed"
-    [ -e "$H/work/containers/swarm-1/node-1" ] && no "pair: its folder removed" || ok "pair: its folder removed"
+    is "$(docker ps -aq --filter "label=haicc.folder=$H/work/containers/swarm-1/peer-1" | wc -l | tr -d ' ')" 0 "pair: its container removed"
+    [ -e "$H/work/containers/swarm-1/peer-1" ] && no "pair: its folder removed" || ok "pair: its folder removed"
     # again, then the machine's teardown with the pair there
-    label=deploy-again; step --output host boot/deploy swarms/swarm-1/node-1 haiccing/base-component-haicc $flag; is $? 0 "pair: deployed again"
+    label=deploy-again; step --output host boot/deploy swarms/swarm-1/peer-1 haiccing/base-component-haicc $flag; is $? 0 "pair: deployed again"
   fi
   label=machine; step boot/teardown; is $? 0 "$mode: haicc boot/teardown"
   is "$(docker ps -aq --filter label=haicc.folder | while read -r id; do docker inspect --format '{{index .Config.Labels "haicc.folder"}}' "$id"; done | grep -c "^$T/")" 0 "$mode: no container of the install left"
@@ -95,7 +95,7 @@ crud/read notes/b'; has "$out" '"line":"crud/read notes/b"' "$mode: a script's l
 scenario host
 scenario pair
 
-echo "# timing (ms): step, the node on the host, the node as a pair"
+echo "# timing (ms): step, the peer on the host, the peer as a pair"
 for s in boot host swarm deploy initialise create read script sub sub-start sub-read teardown machine; do
   a=$(sed -n "s/^host $s //p" "$TIMES"); b=$(sed -n "s/^pair $s //p" "$TIMES")
   echo "# $s ${a:--} ${b:--}"

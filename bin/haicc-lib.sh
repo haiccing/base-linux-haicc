@@ -1,22 +1,28 @@
 # haicc-lib.sh: what the haicc scripts share; sourced, never run.
-#   HAICC_HOME   haicc's own folder: bin/, pins, sources.list, sources/, bare/
+#   HAICC_HOME   haicc's own folder: bin/, pins, sources.list, external.list,
+#                sources/, bare/
 # The pins (the pinned Bare, a build a platform, the organisation, the
 # app) come from $HAICC_HOME/pins; this machine's Bare chosen from them.
 HAICC_HOME=${HAICC_HOME:-$(cd "$(dirname "$0")/.." && pwd)}
 . "$HAICC_HOME/pins"
+# The lists, a line a source: the internal, the install's folders, what the
+# platform reads (folder:<path>); the external (github:<org>), a record of
+# where each download came from, never read inside.
 HAICC_LIST=$HAICC_HOME/sources.list
+HAICC_EXTERNAL=$HAICC_HOME/external.list
 HAICC_BARE=$HAICC_HOME/bare/bin/bare
 
 fail () { printf 'haicc: %s\n' "$1" >&2; exit "${2:-1}"; }
 
-# The sources registered, one a line: the folders first, in the order they
-# were linked (folder:<path>), then https, the backup (github:<org>).
+# The internal list's folders, one a line, in the order linked
+# (folder:<path>); a line of another kind in it is not read.
 sources () {
   [ -f "$HAICC_LIST" ] || return 0
   grep '^folder:' "$HAICC_LIST" || true
-  grep -v '^folder:' "$HAICC_LIST" || true
 }
-# The folders among them, in order.
+# The external list, one a line.
+external () { [ -f "$HAICC_EXTERNAL" ] && cat "$HAICC_EXTERNAL" || true; }
+# The folders, in order.
 folders () { sources | sed -n 's/^folder://p'; }
 # A file (relative to a source) in the first folder that holds it: its path.
 in_sources () {
